@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生産計画スケジューラー</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1>🏭 生産計画スケジューラー</h1>
+            <div class="header-actions">
+                <button id="btn-sync-from-kintone" class="btn btn-secondary">
+                    📥 kintoneから取得
+                </button>
+                <button id="btn-sync-to-kintone" class="btn btn-primary">
+                    📤 kintoneへ送信
+                </button>
+                <button id="btn-settings" class="btn btn-icon" title="設定">
+                    ⚙️
+                </button>
+            </div>
+        </header>
+
+        <!-- タブナビゲーション -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="gantt">📊 ガントチャート</button>
+            <button class="tab" data-tab="schedule">📋 スケジュール一覧</button>
+            <button class="tab" data-tab="add">➕ 新規追加</button>
+            <button class="tab" data-tab="inventory">📦 在庫グラフ</button>
+        </nav>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- ガントチャートビュー -->
+            <section id="gantt-view" class="view active">
+                <div class="view-header">
+                    <h2>ガントチャート</h2>
+                    <div class="date-selector">
+                        <button id="prev-date" class="btn btn-small">◀</button>
+                        <input type="date" id="gantt-date">
+                        <button id="next-date" class="btn btn-small">▶</button>
+                    </div>
+                </div>
+                <div id="gantt-container" class="gantt-container">
+                    <div class="gantt-timeline"></div>
+                    <div class="gantt-rows"></div>
+                </div>
+            </section>
+
+            <!-- スケジュール一覧ビュー -->
+            <section id="schedule-view" class="view">
+                <div class="view-header">
+                    <h2>スケジュール一覧</h2>
+                    <div class="filter-controls">
+                        <select id="filter-line">
+                            <option value="">全ライン</option>
+                            <option value="1">ライン1</option>
+                            <option value="2">ライン2</option>
+                            <option value="3">ライン3</option>
+                        </select>
+                        <select id="filter-status">
+                            <option value="">全ステータス</option>
+                            <option value="予定">予定</option>
+                            <option value="生産中">生産中</option>
+                            <option value="完了">完了</option>
+                        </select>
+                    </div>
+                </div>
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>製品名</th>
+                            <th>ライン</th>
+                            <th>開始日時</th>
+                            <th>終了日時</th>
+                            <th>総個数</th>
+                            <th>状態</th>
+                            <th>同期</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedule-tbody"></tbody>
+                </table>
+            </section>
+
+            <!-- 新規追加ビュー -->
+            <section id="add-view" class="view">
+                <div class="view-header">
+                    <h2>スケジュール追加</h2>
+                </div>
+                <form id="add-schedule-form" class="form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="product-name">製品名</label>
+                            <select id="product-name" required>
+                                <option value="">選択してください</option>
+                                <option value="FS450D">FS450D (450kg)</option>
+                                <option value="FS450K">FS450K (450kg)</option>
+                                <option value="FS450NR">FS450NR (450kg)</option>
+                                <option value="FS450S">FS450S (450kg)</option>
+                                <option value="FS250C">FS250C (250kg)</option>
+                                <option value="FS250CE">FS250CE (250kg)</option>
+                                <option value="FS360F">FS360F (360kg)</option>
+                                <option value="FS021">FS021 (20kg)</option>
+                                <option value="FS021B">FS021B (20kg)</option>
+                                <option value="FS021F">FS021F (20kg)</option>
+                                <option value="小袋">小袋 (20kg)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="line">ライン</label>
+                            <select id="line" required>
+                                <option value="">選択してください</option>
+                                <option value="1">ライン1</option>
+                                <option value="2">ライン2</option>
+                                <option value="3">ライン3</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="start-datetime">開始日時</label>
+                            <input type="datetime-local" id="start-datetime" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-datetime">終了日時（自動計算）</label>
+                            <input type="datetime-local" id="end-datetime" readonly>
+                        </div>
+                    </div>
+                    
+                    <h3>生産数量</h3>
+                    <div class="form-row quantities">
+                        <div class="form-group">
+                            <label for="quantity1">数量1</label>
+                            <input type="number" id="quantity1" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity2">数量2</label>
+                            <input type="number" id="quantity2" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity3">数量3</label>
+                            <input type="number" id="quantity3" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity4">数量4</label>
+                            <input type="number" id="quantity4" min="0">
+                        </div>
+                    </div>
+                    <div class="form-row quantities">
+                        <div class="form-group">
+                            <label for="quantity5">数量5</label>
+                            <input type="number" id="quantity5" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity6">数量6</label>
+                            <input type="number" id="quantity6" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity7">数量7</label>
+                            <input type="number" id="quantity7" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity8">数量8</label>
+                            <input type="number" id="quantity8" min="0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="total-quantity">総個数</label>
+                            <input type="number" id="total-quantity" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="efficiency">製綿能率 (t/h)</label>
+                            <input type="number" id="efficiency" min="0.1" step="0.1" value="1.0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">
+                            ✅ スケジュールを追加
+                        </button>
+                        <button type="reset" class="btn btn-secondary">
+                            🔄 リセット
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- 在庫グラフビュー -->
+            <section id="inventory-view" class="view">
+                <div class="view-header">
+                    <h2>製品在庫グラフ</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="inventory-chart"></canvas>
+                </div>
+            </section>
+        </main>
+
+        <!-- 設定モーダル -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ kintone設定</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <form id="settings-form" class="form">
+                    <div class="form-group">
+                        <label for="subdomain">サブドメイン</label>
+                        <input type="text" id="subdomain" placeholder="例: your-company" required>
+                        <small>.cybozu.com が自動で付加されます</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="app-id">アプリID</label>
+                        <input type="number" id="app-id" placeholder="例: 351" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="api-token">APIトークン</label>
+                        <input type="password" id="api-token" placeholder="APIトークンを入力" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">💾 保存</button>
+                        <button type="button" id="test-connection" class="btn btn-secondary">🔗 接続テスト</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ステータスバー -->
+        <footer class="status-bar">
+            <span id="status-message">準備完了</span>
+            <span id="sync-status">同期: 未接続</span>
+        </footer>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
