@@ -40,6 +40,14 @@ pub struct KintoneConfigRequest {
     pub api_token: String,
 }
 
+/// スケジュール更新リクエスト
+#[derive(Debug, Deserialize)]
+pub struct UpdateScheduleRequest {
+    pub id: i64,
+    pub start_datetime: String,
+    pub end_datetime: Option<String>,
+}
+
 /// レスポンス
 #[derive(Debug, Serialize)]
 pub struct ApiResponse<T> {
@@ -108,6 +116,24 @@ pub fn add_schedule(request: AddScheduleRequest, state: State<AppState>) -> ApiR
     }
 }
 
+/// スケジュールを更新
+#[tauri::command]
+pub fn update_schedule(request: UpdateScheduleRequest, state: State<AppState>) -> ApiResponse<()> {
+    let db = state.db.lock().unwrap();
+    match db.update_schedule_datetime(request.id, &request.start_datetime, request.end_datetime.as_deref()) {
+        Ok(_) => ApiResponse {
+            success: true,
+            data: Some(()),
+            error: None,
+        },
+        Err(e) => ApiResponse {
+            success: false,
+            data: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
 /// kintone設定を保存
 #[tauri::command]
 pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>) -> ApiResponse<()> {
@@ -138,9 +164,12 @@ pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>)
 /// kintoneからスケジュールを取得
 #[tauri::command]
 pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiResponse<Vec<serde_json::Value>>, ()> {
-    let kintone = state.kintone_client.lock().unwrap();
+    let client_opt = {
+        let kintone = state.kintone_client.lock().unwrap();
+        kintone.clone()
+    };
     
-    if let Some(client) = kintone.as_ref() {
+    if let Some(client) = client_opt {
         match client.get_records(None).await {
             Ok(records) => Ok(ApiResponse {
                 success: true,
@@ -170,9 +199,12 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
         db.get_pending_schedules().unwrap_or_default()
     };
 
-    let kintone = state.kintone_client.lock().unwrap();
+    let client_opt = {
+        let kintone = state.kintone_client.lock().unwrap();
+        kintone.clone()
+    };
     
-    if let Some(client) = kintone.as_ref() {
+    if let Some(client) = client_opt {
         let mut synced_count = 0u32;
         
         for schedule in pending_schedules {

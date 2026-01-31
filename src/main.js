@@ -226,32 +226,39 @@ function renderGantt() {
     const rows = container.querySelector(".gantt-rows");
 
     // タイムラインヘッダー
-    timeline.innerHTML = '<div style="width:100px;padding:8px;font-weight:bold;">ライン</div>';
+    timeline.innerHTML = '<div style="width:100px;padding:8px;font-weight:bold;">日付</div>';
     for (let h = 0; h < 24; h++) {
         timeline.innerHTML += `<div style="width:60px;text-align:center;padding:8px;border-left:1px solid #dee2e6;">${h}:00</div>`;
     }
 
-    // 各ラインの行
+    // 日付ごとの行（5日分）
     rows.innerHTML = "";
-    for (let line = 1; line <= 3; line++) {
+    const startDate = new Date(currentDate);
+
+    for (let i = 0; i < 5; i++) {
+        const rowDate = new Date(startDate);
+        rowDate.setDate(startDate.getDate() + i);
+        const dateStr = rowDate.toISOString().split("T")[0];
+        const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()}`;
+
         const row = document.createElement("div");
         row.className = "gantt-row";
+        row.dataset.date = dateStr;
         row.innerHTML = `
-            <div class="gantt-row-label">ライン${line}</div>
-            <div class="gantt-row-content" id="gantt-line-${line}"></div>
+            <div class="gantt-row-label">${displayDate}</div>
+            <div class="gantt-row-content" id="gantt-date-${dateStr}"></div>
         `;
         rows.appendChild(row);
 
         // この日のスケジュールをフィルタ
-        const dateStr = currentDate.toISOString().split("T")[0];
-        const lineSchedules = schedules.filter(s => 
-            s.line === String(line) && 
-            s.start_datetime && 
-            s.start_datetime.startsWith(dateStr)
-        );
+        const daySchedules = schedules.filter(s => {
+            if (!s.start_datetime) return false;
+            const startStr = s.start_datetime.split(" ")[0];
+            return startStr === dateStr;
+        });
 
-        const content = document.getElementById(`gantt-line-${line}`);
-        lineSchedules.forEach(schedule => {
+        const content = document.getElementById(`gantt-date-${dateStr}`);
+        daySchedules.forEach(schedule => {
             const bar = createGanttBar(schedule);
             content.appendChild(bar);
         });
@@ -261,17 +268,19 @@ function renderGantt() {
 function createGanttBar(schedule) {
     const bar = document.createElement("div");
     bar.className = "gantt-bar";
+    bar.dataset.id = schedule.id;
     
     // 時間位置計算
     const startTime = new Date(schedule.start_datetime);
     const endTime = schedule.end_datetime ? new Date(schedule.end_datetime) : new Date(startTime.getTime() + 60*60*1000);
     
+    // 現在の開始時間（分）
     const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-    const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-    const duration = endMinutes - startMinutes;
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const durationMinutes = durationMs / (1000 * 60);
 
     const left = 100 + (startMinutes / 60) * 60; // 100px for label
-    const width = Math.max((duration / 60) * 60, 30);
+    const width = Math.max((durationMinutes / 60) * 60, 30);
 
     bar.style.left = left + "px";
     bar.style.width = width + "px";
@@ -288,7 +297,114 @@ function createGanttBar(schedule) {
     bar.textContent = schedule.product_name;
     bar.title = `${schedule.product_name}\n${formatDateTime(schedule.start_datetime)} - ${formatDateTime(schedule.end_datetime)}\n総個数: ${schedule.total_quantity || "-"}`;
 
+    // ドラッグアンドドロップ設定
+    setupDraggable(bar, schedule, durationMs);
+
     return bar;
+}
+
+// ドラッグアンドドロップ機能
+function setupDraggable(element, schedule, durationMs) {
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+    let currentRow;
+
+    element.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initialLeft = element.offsetLeft;
+        currentRow = element.closest('.gantt-row');
+        
+        element.style.cursor = 'grabbing';
+        element.style.zIndex = 1000;
+        e.preventDefault(); // テキスト選択防止
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+
+        let newLeft = initialLeft + deltaX;
+        
+        // 左端制限 (ラベル幅100px)
+        if (newLeft < 100) newLeft = 100;
+        element.style.left = newLeft + "px";
+
+        // Y軸移動による行ハイライト（簡易的な視覚効果）
+        element.style.top = deltaY + "px";
+    });
+
+    document.addEventListener('mouseup', async (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        element.style.cursor = 'grab';
+        element.style.zIndex = '';
+        element.style.top = ''; // Reset vertical offset
+
+        // ドロップ位置の計算
+        const ganttRect = document.querySelector('.gantt-rows').getBoundingClientRect();
+        const dropY = e.clientY;
+
+        // ドロップされた行を特定
+        const rows = document.querySelectorAll('.gantt-row');
+        let targetRow = null;
+        
+        rows.forEach(row => {
+            const rect = row.getBoundingClientRect();
+            if (dropY >= rect.top && dropY <= rect.bottom) {
+                targetRow = row;
+            }
+        });
+
+        if (targetRow) {
+            const dateStr = targetRow.dataset.date;
+            const newLeft = parseFloat(element.style.left);
+            
+            // 左端(100px)からのオフセットを分に変換 (1時間=60px -> 1分=1px)
+            const minutesFromStart = Math.round(newLeft - 100);
+            const hours = Math.floor(minutesFromStart / 60);
+            const minutes = minutesFromStart % 60;
+
+            // 新しい日時を作成
+            const newStart = new Date(dateStr);
+            newStart.setHours(hours, minutes, 0);
+
+            const newEnd = new Date(newStart.getTime() + durationMs);
+
+            // 更新リクエスト
+            const request = {
+                id: schedule.id,
+                start_datetime: formatIsoString(newStart),
+                end_datetime: formatIsoString(newEnd)
+            };
+
+            try {
+                const response = await invoke("update_schedule", { request });
+                if (response.success) {
+                    setStatus("スケジュールを変更しました");
+                    await loadSchedules();
+                    renderGantt(); // 再描画
+                } else {
+                    setStatus("変更エラー: " + response.error, true);
+                    renderGantt(); // 元に戻す
+                }
+            } catch (error) {
+                setStatus("通信エラー: " + error, true);
+                renderGantt(); // 元に戻す
+            }
+        } else {
+            // 行外にドロップした場合は元に戻す
+            renderGantt();
+        }
+    });
+}
+
+function formatIsoString(date) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 // kintone設定保存

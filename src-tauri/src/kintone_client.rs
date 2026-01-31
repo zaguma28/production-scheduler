@@ -35,6 +35,7 @@ pub struct ProductionRecord {
 }
 
 /// kintone APIクライアント
+#[derive(Clone)]
 pub struct KintoneClient {
     client: Client,
     config: KintoneConfig,

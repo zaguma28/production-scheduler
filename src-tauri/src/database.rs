@@ -232,4 +232,13 @@ impl Database {
         let weight: Option<f64> = stmt.query_row(params![product_name], |row| row.get(0)).ok();
         Ok(weight)
     }
+
+    /// スケジュールの日時を更新
+    pub fn update_schedule_datetime(&self, id: i64, start: &str, end: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE schedules SET start_datetime = ?1, end_datetime = ?2, sync_status = 'modified', updated_at = datetime('now') WHERE id = ?3",
+            params![start, end, id],
+        )?;
+        Ok(())
+    }
 }

@@ -35,6 +35,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_schedules,
             commands::add_schedule,
+            commands::update_schedule,
             commands::save_kintone_config,
             commands::fetch_from_kintone,
             commands::sync_to_kintone,

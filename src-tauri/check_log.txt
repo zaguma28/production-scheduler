@@ -1,0 +1,85 @@
+    Checking production-scheduler v0.1.0 (C:\Users\mt042\.gemini\antigravity\scratch\production-scheduler\src-tauri)
+warning: unused imports: `DateTime` and `Utc`
+ --> src\database.rs:6:14
+  |
+6 | use chrono::{DateTime, Utc};
+  |              ^^^^^^^^  ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error: future cannot be sent between threads safely
+   --> src\commands.rs:139:1
+    |
+139 |   #[tauri::command]
+    |   ^^^^^^^^^^^^^^^^^ future returned by `fetch_from_kintone` is not `Send`
+    |
+   ::: src\lib.rs:35:25
+    |
+ 35 |           .invoke_handler(tauri::generate_handler![
+    |  _________________________-
+ 36 | |             commands::get_schedules,
+ 37 | |             commands::add_schedule,
+ 38 | |             commands::save_kintone_config,
+...   |
+ 41 | |             commands::get_product_weight,
+ 42 | |         ])
+    | |_________- in this macro invocation
+    |
+    = help: within `impl Future<Output = Result<ApiResponse<Vec<serde_json::Value>>, ()>>`, the trait `Send` is not implemented for `std::sync::MutexGuard<'_, std::option::Option<KintoneClient>>`
+note: future is not `Send` as this value is used across an await
+   --> src\commands.rs:144:40
+    |
+141 |     let kintone = state.kintone_client.lock().unwrap();
+    |         ------- has type `std::sync::MutexGuard<'_, std::option::Option<KintoneClient>>` which is not `Send`
+...
+144 |         match client.get_records(None).await {
+    |                                        ^^^^^ await occurs here, with `kintone` maybe used later
+note: required by a bound in `ResultFutureTag::future`
+   --> C:\Users\mt042\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tauri-2.9.5\src\ipc\command.rs:314:42
+    |
+310 |     pub async fn future<T, E, F>(self, value: F) -> Result<InvokeResponseBody, InvokeError>
+    |                  ------ required by a bound in this associated function
+...
+314 |       F: Future<Output = Result<T, E>> + Send,
+    |                                          ^^^^ required by this bound in `ResultFutureTag::future`
+    = note: this error originates in the macro `commands::__cmd__fetch_from_kintone` which comes from the expansion of the macro `tauri::generate_handler` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: future cannot be sent between threads safely
+   --> src\commands.rs:166:1
+    |
+166 |   #[tauri::command]
+    |   ^^^^^^^^^^^^^^^^^ future returned by `sync_to_kintone` is not `Send`
+    |
+   ::: src\lib.rs:35:25
+    |
+ 35 |           .invoke_handler(tauri::generate_handler![
+    |  _________________________-
+ 36 | |             commands::get_schedules,
+ 37 | |             commands::add_schedule,
+ 38 | |             commands::save_kintone_config,
+...   |
+ 41 | |             commands::get_product_weight,
+ 42 | |         ])
+    | |_________- in this macro invocation
+    |
+    = help: within `impl Future<Output = Result<ApiResponse<u32>, ()>>`, the trait `Send` is not implemented for `std::sync::MutexGuard<'_, std::option::Option<KintoneClient>>`
+note: future is not `Send` as this value is used across an await
+   --> src\commands.rs:198:61
+    |
+173 |     let kintone = state.kintone_client.lock().unwrap();
+    |         ------- has type `std::sync::MutexGuard<'_, std::option::Option<KintoneClient>>` which is not `Send`
+...
+198 |                 if client.update_record(kintone_id, record).await.is_ok() {
+    |                                                             ^^^^^ await occurs here, with `kintone` maybe used later
+note: required by a bound in `ResultFutureTag::future`
+   --> C:\Users\mt042\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tauri-2.9.5\src\ipc\command.rs:314:42
+    |
+310 |     pub async fn future<T, E, F>(self, value: F) -> Result<InvokeResponseBody, InvokeError>
+    |                  ------ required by a bound in this associated function
+...
+314 |       F: Future<Output = Result<T, E>> + Send,
+    |                                          ^^^^ required by this bound in `ResultFutureTag::future`
+    = note: this error originates in the macro `commands::__cmd__sync_to_kintone` which comes from the expansion of the macro `tauri::generate_handler` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `production-scheduler` (lib) generated 1 warning
+error: could not compile `production-scheduler` (lib) due to 4 previous errors; 1 warning emitted
