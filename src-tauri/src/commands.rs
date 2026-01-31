@@ -161,9 +161,9 @@ pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>)
     }
 }
 
-/// kintoneからスケジュールを取得
+/// kintoneからスケジュールを取得して保存
 #[tauri::command]
-pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiResponse<Vec<serde_json::Value>>, ()> {
+pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u32>, ()> {
     let client_opt = {
         let kintone = state.kintone_client.lock().unwrap();
         kintone.clone()
@@ -171,11 +171,61 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
     
     if let Some(client) = client_opt {
         match client.get_records(None).await {
-            Ok(records) => Ok(ApiResponse {
-                success: true,
-                data: Some(records),
-                error: None,
-            }),
+            Ok(records) => {
+                let mut count = 0;
+                let db = state.db.lock().unwrap();
+                
+                for record in records {
+                    // kintoneのJSONからLocalScheduleに変換
+                    // 注意: フィールド名はkintoneアプリの設定に依存
+                    let kintone_id = record["$id"]["value"].as_str().unwrap_or("0").parse().unwrap_or(0);
+                    let product_name = record["製品名"]["value"].as_str().unwrap_or("").to_string();
+                    
+                    if product_name.is_empty() { continue; }
+
+                    let line = record["ライン名"]["value"].as_str().unwrap_or("").to_string();
+                    let start_datetime = record["開始日時1"]["value"].as_str().unwrap_or("").to_string();
+                    let end_datetime = record["総終了日時"]["value"].as_str().map(|s| s.to_string());
+                    
+                    let get_qty = |key: &str| -> Option<f64> {
+                        record[key]["value"].as_str().and_then(|s| s.parse().ok())
+                    };
+
+                    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+                    let schedule = LocalSchedule {
+                        id: None,
+                        kintone_record_id: Some(kintone_id),
+                        product_name,
+                        line,
+                        start_datetime,
+                        end_datetime,
+                        quantity1: get_qty("生産数量1"),
+                        quantity2: get_qty("生産数量2"),
+                        quantity3: get_qty("生産数量3"),
+                        quantity4: get_qty("生産数量4"),
+                        quantity5: get_qty("生産数量5"),
+                        quantity6: get_qty("生産数量6"),
+                        quantity7: get_qty("生産数量7"),
+                        quantity8: get_qty("生産数量8"),
+                        total_quantity: get_qty("総個数"),
+                        production_status: "予定".to_string(), // kintoneにステータスフィールドがあればそれを使う
+                        sync_status: "synced".to_string(),
+                        created_at: now.clone(),
+                        updated_at: now,
+                    };
+
+                    if db.import_from_kintone(&schedule).is_ok() {
+                        count += 1;
+                    }
+                }
+
+                Ok(ApiResponse {
+                    success: true,
+                    data: Some(count),
+                    error: None,
+                })
+            },
             Err(e) => Ok(ApiResponse {
                 success: false,
                 data: None,

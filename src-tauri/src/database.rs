@@ -241,4 +241,58 @@ impl Database {
         )?;
         Ok(())
     }
+
+    /// kintoneからのデータをインポート（存在すれば更新、なければ追加）
+    pub fn import_from_kintone(&self, schedule: &LocalSchedule) -> Result<()> {
+        // kintone_record_id で検索
+        let exists: bool = if let Some(kid) = schedule.kintone_record_id {
+            let mut stmt = self.conn.prepare("SELECT EXISTS(SELECT 1 FROM schedules WHERE kintone_record_id = ?)")?;
+            stmt.query_row([kid], |row| row.get(0))?
+        } else {
+            false
+        };
+
+        if exists {
+            // 更新
+            self.conn.execute(
+                "UPDATE schedules SET 
+                    product_name = ?1, line = ?2, start_datetime = ?3, end_datetime = ?4,
+                    quantity1 = ?5, quantity2 = ?6, quantity3 = ?7, quantity4 = ?8, quantity5 = ?9, quantity6 = ?10, quantity7 = ?11, quantity8 = ?12,
+                    total_quantity = ?13, production_status = ?14, sync_status = 'synced', updated_at = datetime('now')
+                WHERE kintone_record_id = ?15",
+                params![
+                    schedule.product_name, schedule.line, schedule.start_datetime, schedule.end_datetime,
+                    schedule.quantity1, schedule.quantity2, schedule.quantity3, schedule.quantity4, schedule.quantity5, schedule.quantity6, schedule.quantity7, schedule.quantity8,
+                    schedule.total_quantity, schedule.production_status, schedule.kintone_record_id
+                ],
+            )?;
+        } else {
+            // 新規追加
+            self.conn.execute(
+                "INSERT INTO schedules (
+                    kintone_record_id, product_name, line, start_datetime, end_datetime,
+                    quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
+                    total_quantity, production_status, sync_status, created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'synced', datetime('now'), datetime('now'))",
+                params![
+                    schedule.kintone_record_id,
+                    schedule.product_name,
+                    schedule.line,
+                    schedule.start_datetime,
+                    schedule.end_datetime,
+                    schedule.quantity1,
+                    schedule.quantity2,
+                    schedule.quantity3,
+                    schedule.quantity4,
+                    schedule.quantity5,
+                    schedule.quantity6,
+                    schedule.quantity7,
+                    schedule.quantity8,
+                    schedule.total_quantity,
+                    schedule.production_status
+                ],
+            )?;
+        }
+        Ok(())
+    }
 }
