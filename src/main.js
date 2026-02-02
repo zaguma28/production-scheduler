@@ -21,6 +21,7 @@ const elements = {};
 
 // 初期化
 document.addEventListener("DOMContentLoaded", async () => {
+    createTooltipElement();
     initElements();
     initEventListeners();
     await loadSchedules();
@@ -28,6 +29,74 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderGantt();
     setStatus("準備完了");
 });
+
+// カスタムツールチップ要素を作成
+function createTooltipElement() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "custom-tooltip";
+    tooltip.id = "custom-tooltip";
+    document.body.appendChild(tooltip);
+}
+
+// ツールチップを表示
+function showTooltip(e, schedule, qty) {
+    const tooltip = document.getElementById("custom-tooltip");
+    if (!tooltip) return;
+    
+    const schedNo = schedule.schedule_number || schedule.kintone_record_id || "-";
+    const statusText = schedule.production_status || "未生産";
+    const statusMap = {
+        "予定": "未生産",
+        "未生産": "未生産",
+        "生産中": "生産中",
+        "生産終了": "生産終了",
+        "完了": "生産終了"
+    };
+    const displayStatus = statusMap[statusText] || statusText;
+    
+    let statusClass = "status-pending";
+    if (statusText === "生産中") statusClass = "status-inprogress";
+    else if (statusText === "生産終了" || statusText === "完了") statusClass = "status-completed";
+    
+    tooltip.innerHTML = `
+        <div class="tooltip-header">[${schedNo}] ${schedule.product_name}</div>
+        <div class="tooltip-row">
+            <span class="tooltip-label">開始:</span>
+            <span class="tooltip-value">${formatDateTime(schedule.start_datetime)}</span>
+        </div>
+        <div class="tooltip-row">
+            <span class="tooltip-label">終了:</span>
+            <span class="tooltip-value">${formatDateTime(schedule.end_datetime)}</span>
+        </div>
+        <div class="tooltip-row">
+            <span class="tooltip-label">個数:</span>
+            <span class="tooltip-value">${qty || "-"} 個</span>
+        </div>
+        ${schedule.notes ? `<div class="tooltip-row"><span class="tooltip-label">備考:</span><span class="tooltip-value">${schedule.notes}</span></div>` : ""}
+        <div class="tooltip-status ${statusClass}">${displayStatus}</div>
+    `;
+    
+    // 位置を計算
+    const x = e.clientX + 15;
+    const y = e.clientY + 15;
+    
+    // 画面からはみ出さないように調整
+    const rect = tooltip.getBoundingClientRect();
+    const maxX = window.innerWidth - 420;
+    const maxY = window.innerHeight - 250;
+    
+    tooltip.style.left = Math.min(x, maxX) + "px";
+    tooltip.style.top = Math.min(y, maxY) + "px";
+    tooltip.classList.add("visible");
+}
+
+// ツールチップを非表示
+function hideTooltip() {
+    const tooltip = document.getElementById("custom-tooltip");
+    if (tooltip) {
+        tooltip.classList.remove("visible");
+    }
+}
 
 // DOM要素の初期化
 function initElements() {
@@ -140,7 +209,7 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
         const preview = document.createElement('div');
         preview.className = 'drop-preview';
         preview.style.position = 'absolute';
-        preview.style.height = '60px';
+        preview.style.height = '110px';
         preview.style.width = element.offsetWidth + 'px';
         preview.style.borderRadius = '8px';
         preview.style.border = '3px solid #007bff';
@@ -152,7 +221,7 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
         const timeLabel = document.createElement('div');
         timeLabel.className = 'preview-time-label';
         timeLabel.style.position = 'absolute';
-        timeLabel.style.top = '-28px';
+        timeLabel.style.top = '-35px';
         timeLabel.style.left = '0';
         timeLabel.style.backgroundColor = '#007bff';
         timeLabel.style.color = 'white';
@@ -213,7 +282,7 @@ function handleGlobalMouseMove(e) {
         }
 
         dragState.dropPreview.style.left = previewLeft + 'px';
-        dragState.dropPreview.style.top = '10px';
+        dragState.dropPreview.style.top = '15px';
         dragState.dropPreview.style.display = 'block';
         dragState.dropPreview.querySelector('.preview-time-label').textContent = timeText;
     } else if (dragState.dropPreview) {
@@ -395,6 +464,7 @@ function renderScheduleTable() {
 
     schedules.forEach(schedule => {
         const tr = document.createElement("tr");
+        tr.dataset.id = schedule.id;
         // schedule_numberを優先、なければkintone_record_id
         const schedNo = schedule.schedule_number || schedule.kintone_record_id || "-";
         tr.innerHTML = `
@@ -407,11 +477,177 @@ function renderScheduleTable() {
             <td><span class="status-badge">${schedule.production_status}</span></td>
             <td><span class="status-badge ${schedule.sync_status}">${getSyncStatusText(schedule.sync_status)}</span></td>
             <td>
-                <button class="btn btn-small btn-secondary">編集</button>
+                <button class="btn btn-small btn-primary btn-edit" data-id="${schedule.id}">編集</button>
+                <button class="btn btn-small btn-danger btn-delete" data-id="${schedule.id}">削除</button>
             </td>
         `;
         tbody.appendChild(tr);
+        
+        // 編集ボタンのイベント
+        tr.querySelector(".btn-edit").addEventListener("click", () => openEditModal(schedule));
+        
+        // 削除ボタンのイベント
+        tr.querySelector(".btn-delete").addEventListener("click", () => handleDeleteSchedule(schedule.id, schedule.product_name));
     });
+}
+
+// 編集モーダルを開く
+function openEditModal(schedule) {
+    const modal = document.getElementById("edit-modal");
+    if (!modal) {
+        createEditModal();
+    }
+    
+    document.getElementById("edit-id").value = schedule.id;
+    document.getElementById("edit-product-name").value = schedule.product_name;
+    document.getElementById("edit-start-datetime").value = formatDateTimeForInput(schedule.start_datetime);
+    document.getElementById("edit-end-datetime").value = formatDateTimeForInput(schedule.end_datetime);
+    document.getElementById("edit-quantity").value = schedule.total_quantity || schedule.quantity1 || "";
+    document.getElementById("edit-notes").value = schedule.notes || "";
+    document.getElementById("edit-status").value = schedule.production_status || "予定";
+    
+    document.getElementById("edit-modal").classList.add("active");
+}
+
+// 日時をinput用にフォーマット
+function formatDateTimeForInput(dateStr) {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "";
+    const pad = (n) => n.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// 編集モーダルを作成
+function createEditModal() {
+    const modal = document.createElement("div");
+    modal.id = "edit-modal";
+    modal.className = "modal";
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 スケジュール編集</h2>
+                <button class="modal-close" id="edit-modal-close">&times;</button>
+            </div>
+            <form id="edit-schedule-form" class="form" style="padding: 24px;">
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label for="edit-product-name">製品名</label>
+                    <input type="text" id="edit-product-name" readonly style="background: #f0f0f0;">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-start-datetime">開始日時</label>
+                        <input type="datetime-local" id="edit-start-datetime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-end-datetime">終了日時</label>
+                        <input type="datetime-local" id="edit-end-datetime">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-quantity">個数</label>
+                        <input type="number" id="edit-quantity" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-status">生産状況</label>
+                        <select id="edit-status">
+                            <option value="予定">未生産</option>
+                            <option value="生産中">生産中</option>
+                            <option value="生産終了">生産終了</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-notes">備考</label>
+                    <input type="text" id="edit-notes" placeholder="備考を入力">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">💾 保存</button>
+                    <button type="button" class="btn btn-secondary" id="edit-modal-cancel">キャンセル</button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // イベントリスナーを設定
+    document.getElementById("edit-modal-close").addEventListener("click", closeEditModal);
+    document.getElementById("edit-modal-cancel").addEventListener("click", closeEditModal);
+    document.getElementById("edit-schedule-form").addEventListener("submit", handleEditSchedule);
+}
+
+// 編集モーダルを閉じる
+function closeEditModal() {
+    document.getElementById("edit-modal").classList.remove("active");
+}
+
+// 編集を保存
+async function handleEditSchedule(e) {
+    e.preventDefault();
+    
+    const id = parseInt(document.getElementById("edit-id").value);
+    const startDatetime = document.getElementById("edit-start-datetime").value;
+    const endDatetime = document.getElementById("edit-end-datetime").value || null;
+    
+    console.log("Edit schedule:", { id, startDatetime, endDatetime });
+    
+    if (!id || !startDatetime) {
+        setStatus("ID または開始日時が無効です", true);
+        return;
+    }
+    
+    try {
+        // datetime-localの値は "2026-02-02T08:00" 形式
+        const formatDT = (dt) => {
+            if (!dt) return null;
+            return dt.replace("T", " ") + ":00";
+        };
+        
+        const request = {
+            id: id,
+            start_datetime: formatDT(startDatetime),
+            end_datetime: formatDT(endDatetime)
+        };
+        
+        console.log("Sending request:", request);
+        
+        const response = await invoke("update_schedule", { request });
+        console.log("Response:", response);
+        
+        if (response.success) {
+            setStatus("スケジュールを更新しました");
+            closeEditModal();
+            await loadSchedules();
+            renderGantt();
+        } else {
+            setStatus("更新エラー: " + (response.error || "不明なエラー"), true);
+        }
+    } catch (error) {
+        console.error("Edit error:", error);
+        setStatus("更新エラー: " + error, true);
+    }
+}
+
+// スケジュールを削除
+async function handleDeleteSchedule(id, productName) {
+    if (!confirm(`「${productName}」のスケジュールを削除しますか？\nこの操作は取り消せません。`)) {
+        return;
+    }
+    
+    try {
+        const response = await invoke("delete_schedule", { id: id });
+        if (response.success) {
+            setStatus("スケジュールを削除しました");
+            await loadSchedules();
+            renderGantt();
+        } else {
+            setStatus("削除エラー: " + response.error, true);
+        }
+    } catch (error) {
+        setStatus("削除エラー: " + error, true);
+    }
 }
 
 // ガントチャート描画
@@ -428,8 +664,9 @@ function renderGantt() {
 
     rows.innerHTML = "";
     const startDate = new Date(currentDate);
+    startDate.setDate(startDate.getDate() - 1); // 1日前から表示
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) { // 6日分表示（前日〜4日後）
         const rowDate = new Date(startDate);
         rowDate.setDate(startDate.getDate() + i);
 
@@ -463,7 +700,7 @@ function renderGantt() {
 
         const lanes = calculateLanes(daySchedules);
         const laneCount = lanes.length > 0 ? lanes.length : 1;
-        row.style.height = `${Math.max(80, laneCount * 70 + 10)}px`;
+        row.style.height = `${Math.max(140, laneCount * 120 + 20)}px`;
 
         lanes.forEach((laneSchedules, laneIndex) => {
             laneSchedules.forEach(schedule => {
@@ -533,12 +770,12 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
 
     const left = (startMinutes / 60) * 60;
     const width = Math.max((durationMinutes / 60) * 60, 60);
-    const top = 10 + laneIndex * 70;
+    const top = 10 + laneIndex * 120;
 
     bar.style.left = left + "px";
     bar.style.width = width + "px";
     bar.style.top = top + "px";
-    bar.style.height = "60px";
+    bar.style.height = '110px';
 
     if (schedule.production_status === "生産終了") {
         bar.classList.add("status-completed");
@@ -563,6 +800,20 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
         bar.appendChild(qtySpan);
     }
 
+    // ステータスラベルを追加
+    const statusSpan = document.createElement("span");
+    statusSpan.className = "bar-status";
+    const statusText = schedule.production_status || "未生産";
+    const statusMap = {
+        "予定": "未生産",
+        "未生産": "未生産",
+        "生産中": "生産中",
+        "生産終了": "生産終了",
+        "完了": "生産終了"
+    };
+    statusSpan.textContent = `【${statusMap[statusText] || statusText}】`;
+    bar.appendChild(statusSpan);
+
     if (schedule.notes) {
         const notesSpan = document.createElement("span");
         notesSpan.className = "bar-notes";
@@ -570,13 +821,10 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
         bar.appendChild(notesSpan);
     }
 
-    let tooltip = `No.${schedNo} ${schedule.product_name}\n`;
-    tooltip += `${formatDateTime(schedule.start_datetime)} - ${formatDateTime(schedule.end_datetime)}\n`;
-    tooltip += `個数: ${qty || "-"}`;
-    if (schedule.notes) {
-        tooltip += `\n備考: ${schedule.notes}`;
-    }
-    bar.title = tooltip;
+    // カスタムツールチップイベント
+    bar.addEventListener("mouseenter", (e) => showTooltip(e, schedule, qty));
+    bar.addEventListener("mousemove", (e) => showTooltip(e, schedule, qty));
+    bar.addEventListener("mouseleave", hideTooltip);
 
     setupDraggable(bar, schedule, durationMs, dayStart6AM);
 
@@ -710,3 +958,12 @@ function setStatus(message, isError = false) {
     elements.statusMessage.textContent = message;
     elements.statusMessage.style.color = isError ? "#ff6b6b" : "#ccc";
 }
+
+
+
+
+
+
+
+
+

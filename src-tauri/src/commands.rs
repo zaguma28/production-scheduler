@@ -99,6 +99,14 @@ pub fn add_schedule(request: AddScheduleRequest, state: State<AppState>) -> ApiR
         quantity7: request.quantity7,
         quantity8: request.quantity8,
         total_quantity: request.total_quantity,
+        efficiency1: None,
+        efficiency2: None,
+        efficiency3: None,
+        efficiency4: None,
+        efficiency5: None,
+        efficiency6: None,
+        efficiency7: None,
+        efficiency8: None,
         production_status: request.production_status.unwrap_or("予定".to_string()),
         notes: request.notes,
         sync_status: "pending".to_string(),
@@ -179,6 +187,12 @@ fn get_string_value(record: &serde_json::Value, field: &str) -> String {
     String::new()
 }
 
+/// 文字列またはnullの値を取得するヘルパー（Option版）
+fn get_optional_string_value(record: &serde_json::Value, field: &str) -> Option<String> {
+    let val = get_string_value(record, field);
+    if val.is_empty() { None } else { Some(val) }
+}
+
 /// 数値フィールドの値を取得するヘルパー
 fn get_number_value(record: &serde_json::Value, field: &str) -> Option<f64> {
     if let Some(field_obj) = record.get(field) {
@@ -225,8 +239,7 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     let kintone_id: u32 = get_string_value(&record, "$id").parse().unwrap_or(0);
 
                     // スケジュール番号フィールドを取得
-                    let schedule_number_str = get_string_value(&record, "スケジュール番号");
-                    let schedule_number = if schedule_number_str.is_empty() { None } else { Some(schedule_number_str) };
+                    let schedule_number = get_optional_string_value(&record, "スケジュール番号");
 
                     // 製品名を取得（SINGLE_LINE_TEXT）
                     let product_name = get_string_value(&record, "製品名");
@@ -250,16 +263,24 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     let start_datetime = get_string_value(&record, "開始日時1");
 
                     // 総終了日時 - DATETIME
-                    let end_datetime_str = get_string_value(&record, "総終了日時");
-                    let end_datetime = if end_datetime_str.is_empty() { None } else { Some(end_datetime_str) };
+                    let end_datetime = get_optional_string_value(&record, "総終了日時");
 
                     // 生産状況 - DROP_DOWN (nullの場合がある)
                     let production_status = get_string_value(&record, "生産状況");
                     let production_status = if production_status.is_empty() { "予定".to_string() } else { production_status };
 
                     // 内製造備考1 - SINGLE_LINE_TEXT
-                    let notes_str = get_string_value(&record, "内製造備考1");
-                    let notes = if notes_str.is_empty() { None } else { Some(notes_str) };
+                    let notes = get_optional_string_value(&record, "内製造備考1");
+
+                    // 製綿能率1-8 - DROP_DOWN (kintoneドロップダウン値)
+                    let efficiency1 = get_optional_string_value(&record, "製綿能率1");
+                    let efficiency2 = get_optional_string_value(&record, "製綿能率2");
+                    let efficiency3 = get_optional_string_value(&record, "製綿能率3");
+                    let efficiency4 = get_optional_string_value(&record, "製綿能率4");
+                    let efficiency5 = get_optional_string_value(&record, "製綿能率5");
+                    let efficiency6 = get_optional_string_value(&record, "製綿能率6");
+                    let efficiency7 = get_optional_string_value(&record, "製綿能率7");
+                    let efficiency8 = get_optional_string_value(&record, "製綿能率8");
 
                     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -280,6 +301,14 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                         quantity7: get_number_value(&record, "生産数量7"),
                         quantity8: get_number_value(&record, "生産数量8"),
                         total_quantity: get_number_value(&record, "総個数"),
+                        efficiency1: efficiency1.clone(),
+                        efficiency2,
+                        efficiency3,
+                        efficiency4,
+                        efficiency5,
+                        efficiency6,
+                        efficiency7,
+                        efficiency8,
                         production_status,
                         notes,
                         sync_status: "synced".to_string(),
@@ -289,7 +318,7 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
 
                     if db.import_from_kintone(&schedule).is_ok() {
                         count += 1;
-                        eprintln!("  Record {}: imported ({}) schedule_no={:?}", kintone_id, product_name, schedule_number);
+                        eprintln!("  Record {}: imported ({}) schedule_no={:?} efficiency1={:?}", kintone_id, product_name, schedule_number, efficiency1);
                     }
                 }
 
@@ -350,6 +379,14 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
                 "生産数量7": { "value": schedule.quantity7.map(|v| v.to_string()) },
                 "生産数量8": { "value": schedule.quantity8.map(|v| v.to_string()) },
                 "総個数": { "value": schedule.total_quantity.map(|v| v.to_string()) },
+                "製綿能率1": { "value": schedule.efficiency1 },
+                "製綿能率2": { "value": schedule.efficiency2 },
+                "製綿能率3": { "value": schedule.efficiency3 },
+                "製綿能率4": { "value": schedule.efficiency4 },
+                "製綿能率5": { "value": schedule.efficiency5 },
+                "製綿能率6": { "value": schedule.efficiency6 },
+                "製綿能率7": { "value": schedule.efficiency7 },
+                "製綿能率8": { "value": schedule.efficiency8 },
             });
 
             if let Some(kintone_id) = schedule.kintone_record_id {
@@ -381,6 +418,24 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
     }
 }
 
+/// スケジュールを削除
+#[tauri::command]
+pub fn delete_schedule(id: i64, state: State<AppState>) -> ApiResponse<()> {
+    let db = state.db.lock().unwrap();
+    match db.delete_schedule(id) {
+        Ok(_) => ApiResponse {
+            success: true,
+            data: Some(()),
+            error: None,
+        },
+        Err(e) => ApiResponse {
+            success: false,
+            data: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
 /// 製品の重量を取得
 #[tauri::command]
 pub fn get_product_weight(product_name: String, state: State<AppState>) -> ApiResponse<f64> {
@@ -403,3 +458,4 @@ pub fn get_product_weight(product_name: String, state: State<AppState>) -> ApiRe
         },
     }
 }
+

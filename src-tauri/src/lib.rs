@@ -54,7 +54,9 @@ pub fn run() {
             commands::fetch_from_kintone,
             commands::sync_to_kintone,
             commands::get_product_weight,
+            commands::delete_schedule,
         ])
         .run(tauri::generate_context!())
         .expect("アプリケーションの実行中にエラーが発生しました");
 }
+

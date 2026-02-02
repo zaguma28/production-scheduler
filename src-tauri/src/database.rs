@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct LocalSchedule {
     pub id: Option<i64>,
     pub kintone_record_id: Option<u32>,
-    pub schedule_number: Option<String>,  // kintoneのスケジュール番号フィールド
+    pub schedule_number: Option<String>,
     pub product_name: String,
     pub line: String,
     pub start_datetime: String,
@@ -23,6 +23,14 @@ pub struct LocalSchedule {
     pub quantity7: Option<f64>,
     pub quantity8: Option<f64>,
     pub total_quantity: Option<f64>,
+    pub efficiency1: Option<String>,  // 製綿能率1 (DROP_DOWN)
+    pub efficiency2: Option<String>,  // 製綿能率2
+    pub efficiency3: Option<String>,  // 製綿能率3
+    pub efficiency4: Option<String>,  // 製綿能率4
+    pub efficiency5: Option<String>,  // 製綿能率5
+    pub efficiency6: Option<String>,  // 製綿能率6
+    pub efficiency7: Option<String>,  // 製綿能率7
+    pub efficiency8: Option<String>,  // 製綿能率8
     pub production_status: String,
     pub notes: Option<String>,
     pub sync_status: String,
@@ -64,6 +72,14 @@ impl Database {
                 quantity7 REAL,
                 quantity8 REAL,
                 total_quantity REAL,
+                efficiency1 TEXT,
+                efficiency2 TEXT,
+                efficiency3 TEXT,
+                efficiency4 TEXT,
+                efficiency5 TEXT,
+                efficiency6 TEXT,
+                efficiency7 TEXT,
+                efficiency8 TEXT,
                 production_status TEXT DEFAULT '予定',
                 notes TEXT,
                 sync_status TEXT DEFAULT 'pending',
@@ -73,11 +89,16 @@ impl Database {
             [],
         )?;
 
-        // schedule_numberカラムがなければ追加
-        let _ = self.conn.execute(
-            "ALTER TABLE schedules ADD COLUMN schedule_number TEXT",
-            [],
-        );
+        // 既存テーブルにカラム追加（エラーは無視）
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN schedule_number TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency1 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency2 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency3 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency4 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency5 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency6 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency7 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency8 TEXT", []);
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS kintone_config (
@@ -125,8 +146,9 @@ impl Database {
             "INSERT INTO schedules (
                 kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                 quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                total_quantity, production_status, notes, sync_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
+                production_status, notes, sync_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 schedule.kintone_record_id,
                 schedule.schedule_number,
@@ -143,6 +165,14 @@ impl Database {
                 schedule.quantity7,
                 schedule.quantity8,
                 schedule.total_quantity,
+                schedule.efficiency1,
+                schedule.efficiency2,
+                schedule.efficiency3,
+                schedule.efficiency4,
+                schedule.efficiency5,
+                schedule.efficiency6,
+                schedule.efficiency7,
+                schedule.efficiency8,
                 schedule.production_status,
                 schedule.notes,
                 schedule.sync_status,
@@ -158,7 +188,8 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, notes, sync_status, created_at, updated_at
+                    total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
+                    production_status, notes, sync_status, created_at, updated_at
              FROM schedules ORDER BY start_datetime"
         )?;
 
@@ -180,11 +211,19 @@ impl Database {
                 quantity7: row.get(13)?,
                 quantity8: row.get(14)?,
                 total_quantity: row.get(15)?,
-                production_status: row.get(16)?,
-                notes: row.get(17)?,
-                sync_status: row.get(18)?,
-                created_at: row.get(19)?,
-                updated_at: row.get(20)?,
+                efficiency1: row.get(16)?,
+                efficiency2: row.get(17)?,
+                efficiency3: row.get(18)?,
+                efficiency4: row.get(19)?,
+                efficiency5: row.get(20)?,
+                efficiency6: row.get(21)?,
+                efficiency7: row.get(22)?,
+                efficiency8: row.get(23)?,
+                production_status: row.get(24)?,
+                notes: row.get(25)?,
+                sync_status: row.get(26)?,
+                created_at: row.get(27)?,
+                updated_at: row.get(28)?,
             })
         })?;
 
@@ -196,7 +235,8 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, notes, sync_status, created_at, updated_at
+                    total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
+                    production_status, notes, sync_status, created_at, updated_at
              FROM schedules WHERE sync_status = 'pending' OR sync_status = 'modified'"
         )?;
 
@@ -218,11 +258,19 @@ impl Database {
                 quantity7: row.get(13)?,
                 quantity8: row.get(14)?,
                 total_quantity: row.get(15)?,
-                production_status: row.get(16)?,
-                notes: row.get(17)?,
-                sync_status: row.get(18)?,
-                created_at: row.get(19)?,
-                updated_at: row.get(20)?,
+                efficiency1: row.get(16)?,
+                efficiency2: row.get(17)?,
+                efficiency3: row.get(18)?,
+                efficiency4: row.get(19)?,
+                efficiency5: row.get(20)?,
+                efficiency6: row.get(21)?,
+                efficiency7: row.get(22)?,
+                efficiency8: row.get(23)?,
+                production_status: row.get(24)?,
+                notes: row.get(25)?,
+                sync_status: row.get(26)?,
+                created_at: row.get(27)?,
+                updated_at: row.get(28)?,
             })
         })?;
 
@@ -234,6 +282,15 @@ impl Database {
         self.conn.execute(
             "UPDATE schedules SET sync_status = ?1, kintone_record_id = ?2, updated_at = datetime('now') WHERE id = ?3",
             params![status, kintone_id, id],
+        )?;
+        Ok(())
+    }
+
+    /// スケジュールを削除
+    pub fn delete_schedule(&self, id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM schedules WHERE id = ?1",
+            params![id],
         )?;
         Ok(())
     }
@@ -259,7 +316,6 @@ impl Database {
 
     /// kintoneからのデータをインポート（存在すれば更新、なければ追加）
     pub fn import_from_kintone(&self, schedule: &LocalSchedule) -> Result<()> {
-        // kintone_record_id で検索
         let exists: bool = if let Some(kid) = schedule.kintone_record_id {
             let mut stmt = self.conn.prepare("SELECT EXISTS(SELECT 1 FROM schedules WHERE kintone_record_id = ?)")?;
             stmt.query_row([kid], |row| row.get(0))?
@@ -268,27 +324,28 @@ impl Database {
         };
 
         if exists {
-            // 更新
             self.conn.execute(
                 "UPDATE schedules SET
                     schedule_number = ?1, product_name = ?2, line = ?3, start_datetime = ?4, end_datetime = ?5,
                     quantity1 = ?6, quantity2 = ?7, quantity3 = ?8, quantity4 = ?9, quantity5 = ?10, quantity6 = ?11, quantity7 = ?12, quantity8 = ?13,
-                    total_quantity = ?14, production_status = ?15, notes = ?16, sync_status = 'synced', updated_at = datetime('now')
-                WHERE kintone_record_id = ?17",
+                    total_quantity = ?14, efficiency1 = ?15, efficiency2 = ?16, efficiency3 = ?17, efficiency4 = ?18, efficiency5 = ?19, efficiency6 = ?20, efficiency7 = ?21, efficiency8 = ?22,
+                    production_status = ?23, notes = ?24, sync_status = 'synced', updated_at = datetime('now')
+                WHERE kintone_record_id = ?25",
                 params![
                     schedule.schedule_number, schedule.product_name, schedule.line, schedule.start_datetime, schedule.end_datetime,
                     schedule.quantity1, schedule.quantity2, schedule.quantity3, schedule.quantity4, schedule.quantity5, schedule.quantity6, schedule.quantity7, schedule.quantity8,
-                    schedule.total_quantity, schedule.production_status, schedule.notes, schedule.kintone_record_id
+                    schedule.total_quantity, schedule.efficiency1, schedule.efficiency2, schedule.efficiency3, schedule.efficiency4, schedule.efficiency5, schedule.efficiency6, schedule.efficiency7, schedule.efficiency8,
+                    schedule.production_status, schedule.notes, schedule.kintone_record_id
                 ],
             )?;
         } else {
-            // 新規追加
             self.conn.execute(
                 "INSERT INTO schedules (
                     kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, notes, sync_status, created_at, updated_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'synced', datetime('now'), datetime('now'))",
+                    total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
+                    production_status, notes, sync_status, created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, 'synced', datetime('now'), datetime('now'))",
                 params![
                     schedule.kintone_record_id,
                     schedule.schedule_number,
@@ -305,6 +362,14 @@ impl Database {
                     schedule.quantity7,
                     schedule.quantity8,
                     schedule.total_quantity,
+                    schedule.efficiency1,
+                    schedule.efficiency2,
+                    schedule.efficiency3,
+                    schedule.efficiency4,
+                    schedule.efficiency5,
+                    schedule.efficiency6,
+                    schedule.efficiency7,
+                    schedule.efficiency8,
                     schedule.production_status,
                     schedule.notes
                 ],
@@ -313,3 +378,4 @@ impl Database {
         Ok(())
     }
 }
+
