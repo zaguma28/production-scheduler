@@ -6,7 +6,6 @@
     <title>生産計画スケジューラー</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -60,12 +59,6 @@
                 <div class="view-header">
                     <h2>スケジュール一覧</h2>
                     <div class="filter-controls">
-                        <select id="filter-line">
-                            <option value="">全ライン</option>
-                            <option value="1">ライン1</option>
-                            <option value="2">ライン2</option>
-                            <option value="3">ライン3</option>
-                        </select>
                         <select id="filter-status">
                             <option value="">全ステータス</option>
                             <option value="予定">予定</option>
@@ -77,11 +70,12 @@
                 <table class="schedule-table">
                     <thead>
                         <tr>
+                            <th>No.</th>
                             <th>製品名</th>
-                            <th>ライン</th>
                             <th>開始日時</th>
                             <th>終了日時</th>
-                            <th>総個数</th>
+                            <th>個数</th>
+                            <th>備考</th>
                             <th>状態</th>
                             <th>同期</th>
                             <th>操作</th>
@@ -112,75 +106,34 @@
                                 <option value="FS021">FS021 (20kg)</option>
                                 <option value="FS021B">FS021B (20kg)</option>
                                 <option value="FS021F">FS021F (20kg)</option>
+                                <option value="FS021PF">FS021PF (20kg)</option>
+                                <option value="FS021PS">FS021PS (20kg)</option>
                                 <option value="小袋">小袋 (20kg)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="line">ライン</label>
-                            <select id="line" required>
-                                <option value="">選択してください</option>
-                                <option value="1">ライン1</option>
-                                <option value="2">ライン2</option>
-                                <option value="3">ライン3</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
                             <label for="start-datetime">開始日時</label>
                             <input type="datetime-local" id="start-datetime" required>
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label for="end-datetime">終了日時（自動計算）</label>
                             <input type="datetime-local" id="end-datetime" readonly>
                         </div>
-                    </div>
-                    
-                    <h3>生産数量</h3>
-                    <div class="form-row quantities">
                         <div class="form-group">
-                            <label for="quantity1">数量1</label>
-                            <input type="number" id="quantity1" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity2">数量2</label>
-                            <input type="number" id="quantity2" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity3">数量3</label>
-                            <input type="number" id="quantity3" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity4">数量4</label>
-                            <input type="number" id="quantity4" min="0">
-                        </div>
-                    </div>
-                    <div class="form-row quantities">
-                        <div class="form-group">
-                            <label for="quantity5">数量5</label>
-                            <input type="number" id="quantity5" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity6">数量6</label>
-                            <input type="number" id="quantity6" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity7">数量7</label>
-                            <input type="number" id="quantity7" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="quantity8">数量8</label>
-                            <input type="number" id="quantity8" min="0">
+                            <label for="efficiency">製綿能率 (t/h)</label>
+                            <input type="number" id="efficiency" min="0.1" step="0.1" value="1.0">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="total-quantity">総個数</label>
-                            <input type="number" id="total-quantity" readonly>
+                            <label for="quantity1">個数</label>
+                            <input type="number" id="quantity1" min="0" placeholder="生産個数を入力">
                         </div>
                         <div class="form-group">
-                            <label for="efficiency">製綿能率 (t/h)</label>
-                            <input type="number" id="efficiency" min="0.1" step="0.1" value="1.0">
+                            <label for="notes">備考</label>
+                            <input type="text" id="notes" placeholder="備考を入力">
                         </div>
                     </div>
                     <div class="form-actions">

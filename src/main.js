@@ -6,9 +6,9 @@ const productWeights = {
     "FS450D": 450, "FS450K": 450, "FS450NR": 450, "FS450S": 450,
     "FS250C": 250, "FS250CE": 250,
     "FS360F": 360,
-    "FS021B": 20, "FS021F": 20, "FS021P": 20, "FS021NR": 20, "FS021": 20, 
+    "FS021B": 20, "FS021F": 20, "FS021P": 20, "FS021NR": 20, "FS021": 20,
     "FS021S": 20, "FS021PF": 20, "FS021PS": 20,
-    "FS021EMF": 20, "FS021EMS": 20, "FS021NRF": 20, "FS021NRS": 20, 
+    "FS021EMF": 20, "FS021EMS": 20, "FS021NRF": 20, "FS021NRS": 20,
     "小袋": 20
 };
 
@@ -50,12 +50,10 @@ function initElements() {
 
 // イベントリスナーの設定
 function initEventListeners() {
-    // タブ切り替え
     elements.tabs.forEach(tab => {
         tab.addEventListener("click", () => switchTab(tab.dataset.tab));
     });
 
-    // 日付ナビゲーション
     elements.prevDate.addEventListener("click", () => changeDate(-1));
     elements.nextDate.addEventListener("click", () => changeDate(1));
     elements.ganttDate.addEventListener("change", (e) => {
@@ -63,43 +61,33 @@ function initEventListeners() {
         renderGantt();
     });
 
-    // フォーム送信
     elements.addForm.addEventListener("submit", handleAddSchedule);
 
-    // 数量入力で総個数を自動計算
-    for (let i = 1; i <= 8; i++) {
-        const input = document.getElementById(`quantity${i}`);
-        if (input) {
-            input.addEventListener("input", calculateTotals);
-        }
+    const quantityInput = document.getElementById("quantity1");
+    if (quantityInput) {
+        quantityInput.addEventListener("input", calculateTotals);
     }
 
-    // 製品選択で終了時刻を計算
     document.getElementById("product-name").addEventListener("change", calculateTotals);
     document.getElementById("start-datetime").addEventListener("change", calculateTotals);
     document.getElementById("efficiency").addEventListener("change", calculateTotals);
 
-    // 設定モーダル
     elements.btnSettings.addEventListener("click", () => {
         elements.settingsModal.classList.add("active");
     });
-    
+
     document.querySelector(".modal-close").addEventListener("click", () => {
         elements.settingsModal.classList.remove("active");
     });
 
     elements.settingsForm.addEventListener("submit", handleSaveSettings);
-
-    // kintone同期
     elements.btnSyncFrom.addEventListener("click", handleSyncFromKintone);
     elements.btnSyncTo.addEventListener("click", handleSyncToKintone);
 
-    // テストデータ作成
     if (elements.btnTestData) {
         elements.btnTestData.addEventListener("click", handleGenerateTestData);
     }
 
-    // グローバルドラッグイベント（1回だけ登録）
     document.addEventListener('mousemove', handleGlobalMouseMove);
     document.addEventListener('mouseup', handleGlobalMouseUp);
 }
@@ -111,37 +99,71 @@ const dragState = {
     ghost: null,
     schedule: null,
     startX: 0,
+    startY: 0,
     initialLeft: 0,
     durationMs: 0,
-    dayStart6AM: null
+    barWidth: 0,
+    dayStart6AM: null,
+    originalRow: null,
+    dropPreview: null
 };
 
-
-
-// ドラッグ有効化（要素側）
+// ドラッグ有効化
 function setupDraggable(element, schedule, durationMs, dayStart6AM) {
     element.addEventListener('mousedown', (e) => {
-        // 既存のドラッグがあればキャンセル
         if (dragState.isDragging) return;
 
         dragState.isDragging = true;
         dragState.element = element;
         dragState.schedule = schedule;
         dragState.durationMs = durationMs;
+        dragState.barWidth = element.offsetWidth;
         dragState.dayStart6AM = dayStart6AM;
         dragState.startX = e.clientX;
+        dragState.startY = e.clientY;
         dragState.initialLeft = parseFloat(element.style.left);
-        
-        // ゴースト作成
+        dragState.originalRow = element.closest('.gantt-row');
+
         const ghost = element.cloneNode(true);
         ghost.classList.add('gantt-ghost');
-        ghost.style.opacity = '0.5';
+        ghost.style.opacity = '0.6';
         ghost.style.border = '2px dashed #333';
         ghost.style.zIndex = '1000';
-        ghost.style.pointerEvents = 'none'; // マウスイベントを透過
-        element.parentNode.appendChild(ghost); // 同じコンテナに追加
+        ghost.style.pointerEvents = 'none';
+        ghost.style.position = 'fixed';
+        ghost.style.top = (e.clientY - 30) + 'px';
+        ghost.style.left = (e.clientX - 50) + 'px';
+        ghost.style.width = element.offsetWidth + 'px';
+        document.body.appendChild(ghost);
         dragState.ghost = ghost;
 
+        const preview = document.createElement('div');
+        preview.className = 'drop-preview';
+        preview.style.position = 'absolute';
+        preview.style.height = '60px';
+        preview.style.width = element.offsetWidth + 'px';
+        preview.style.borderRadius = '8px';
+        preview.style.border = '3px solid #007bff';
+        preview.style.backgroundColor = 'rgba(0, 123, 255, 0.2)';
+        preview.style.pointerEvents = 'none';
+        preview.style.zIndex = '100';
+        preview.style.display = 'none';
+
+        const timeLabel = document.createElement('div');
+        timeLabel.className = 'preview-time-label';
+        timeLabel.style.position = 'absolute';
+        timeLabel.style.top = '-28px';
+        timeLabel.style.left = '0';
+        timeLabel.style.backgroundColor = '#007bff';
+        timeLabel.style.color = 'white';
+        timeLabel.style.padding = '4px 10px';
+        timeLabel.style.borderRadius = '6px';
+        timeLabel.style.fontSize = '13px';
+        timeLabel.style.fontWeight = 'bold';
+        timeLabel.style.whiteSpace = 'nowrap';
+        preview.appendChild(timeLabel);
+
+        dragState.dropPreview = preview;
         element.style.opacity = '0.3';
         e.preventDefault();
     });
@@ -150,41 +172,66 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
 function handleGlobalMouseMove(e) {
     if (!dragState.isDragging || !dragState.ghost) return;
 
-    const deltaX = e.clientX - dragState.startX;
-    let newLeft = dragState.initialLeft + deltaX;
-    
-    // 左端制限
-    if (newLeft < 100) newLeft = 100;
-    
-    // グリッドスナップ (15分単位 = 15px)
-    const snap = 15;
-    const offset = newLeft - 100;
-    const snappedOffset = Math.round(offset / snap) * snap;
-    const snappedLeft = 100 + snappedOffset;
+    dragState.ghost.style.top = (e.clientY - 30) + 'px';
+    dragState.ghost.style.left = (e.clientX - 50) + 'px';
 
-    dragState.ghost.style.left = snappedLeft + "px";
-
-    // 行ハイライト
     const dropY = e.clientY;
+    let targetRow = null;
+
     document.querySelectorAll('.gantt-row').forEach(row => {
         const rect = row.getBoundingClientRect();
         if (dropY >= rect.top && dropY <= rect.bottom) {
-            row.style.backgroundColor = 'rgba(0,0,0,0.05)';
+            targetRow = row;
+            row.style.backgroundColor = 'rgba(0, 123, 255, 0.08)';
         } else {
             row.style.backgroundColor = '';
         }
     });
+
+    if (targetRow && dragState.dropPreview) {
+        const contentDiv = targetRow.querySelector('.gantt-row-content');
+        const contentRect = contentDiv.getBoundingClientRect();
+        const relativeX = e.clientX - contentRect.left;
+        const minutesFromStart = Math.round(relativeX / 60 * 60);
+        const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
+        const previewLeft = (snappedMinutes / 60) * 60;
+
+        const dateStr = targetRow.dataset.date;
+        const targetDate6AM = new Date(dateStr);
+        targetDate6AM.setHours(6, 0, 0, 0);
+        const previewStart = new Date(targetDate6AM.getTime() + snappedMinutes * 60 * 1000);
+        const previewEnd = new Date(previewStart.getTime() + dragState.durationMs);
+
+        const formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const timeText = `${formatTime(previewStart)} - ${formatTime(previewEnd)}`;
+
+        if (dragState.dropPreview.parentNode !== contentDiv) {
+            if (dragState.dropPreview.parentNode) {
+                dragState.dropPreview.parentNode.removeChild(dragState.dropPreview);
+            }
+            contentDiv.appendChild(dragState.dropPreview);
+        }
+
+        dragState.dropPreview.style.left = previewLeft + 'px';
+        dragState.dropPreview.style.top = '10px';
+        dragState.dropPreview.style.display = 'block';
+        dragState.dropPreview.querySelector('.preview-time-label').textContent = timeText;
+    } else if (dragState.dropPreview) {
+        dragState.dropPreview.style.display = 'none';
+    }
 }
 
 async function handleGlobalMouseUp(e) {
     if (!dragState.isDragging) return;
 
-    const { element, ghost, schedule, durationMs } = dragState;
+    const { element, ghost, schedule, durationMs, dropPreview } = dragState;
 
-    // ハイライト解除
     document.querySelectorAll('.gantt-row').forEach(r => r.style.backgroundColor = '');
 
-    // ドロップ判定
+    if (dropPreview && dropPreview.parentNode) {
+        dropPreview.parentNode.removeChild(dropPreview);
+    }
+
     const dropY = e.clientY;
     let targetRow = null;
     document.querySelectorAll('.gantt-row').forEach(row => {
@@ -196,16 +243,18 @@ async function handleGlobalMouseUp(e) {
 
     if (targetRow && ghost) {
         const dateStr = targetRow.dataset.date;
-        const finalLeft = parseFloat(ghost.style.left);
-        const minutesFromStart = Math.round(finalLeft - 100);
-        
+        const contentDiv = targetRow.querySelector('.gantt-row-content');
+        const contentRect = contentDiv.getBoundingClientRect();
+        const relativeX = e.clientX - contentRect.left;
+        const minutesFromStart = Math.round(relativeX / 60 * 60);
+        const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
+
         const targetDate6AM = new Date(dateStr);
         targetDate6AM.setHours(6, 0, 0, 0);
-        
-        const newStart = new Date(targetDate6AM.getTime() + minutesFromStart * 60 * 1000);
+
+        const newStart = new Date(targetDate6AM.getTime() + snappedMinutes * 60 * 1000);
         const newEnd = new Date(newStart.getTime() + durationMs);
 
-        // API呼び出し
         try {
             const request = {
                 id: schedule.id,
@@ -216,6 +265,7 @@ async function handleGlobalMouseUp(e) {
             if (response.success) {
                 setStatus("スケジュールを変更しました");
                 await loadSchedules();
+                renderGantt();
             } else {
                 setStatus("変更エラー: " + response.error, true);
                 renderGantt();
@@ -228,16 +278,16 @@ async function handleGlobalMouseUp(e) {
         renderGantt();
     }
 
-    // クリーンアップ
     if (ghost) ghost.remove();
     if (element) element.style.opacity = '';
-    
-    // 状態リセット
+
     dragState.isDragging = false;
     dragState.element = null;
     dragState.ghost = null;
     dragState.schedule = null;
     dragState.dayStart6AM = null;
+    dragState.originalRow = null;
+    dragState.dropPreview = null;
 }
 
 function formatIsoString(date) {
@@ -245,11 +295,10 @@ function formatIsoString(date) {
     return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// タブ切り替え
 function switchTab(tabName) {
     elements.tabs.forEach(t => t.classList.remove("active"));
     elements.views.forEach(v => v.classList.remove("active"));
-    
+
     document.querySelector(`[data-tab="${tabName}"]`).classList.add("active");
     document.getElementById(`${tabName}-view`).classList.add("active");
 
@@ -260,7 +309,6 @@ function switchTab(tabName) {
     }
 }
 
-// 日付変更
 function changeDate(delta) {
     currentDate.setDate(currentDate.getDate() + delta);
     updateGanttDate();
@@ -271,7 +319,6 @@ function updateGanttDate() {
     elements.ganttDate.value = currentDate.toISOString().split("T")[0];
 }
 
-// スケジュール読み込み
 async function loadSchedules() {
     try {
         const response = await invoke("get_schedules");
@@ -286,25 +333,27 @@ async function loadSchedules() {
     }
 }
 
-// スケジュール追加
 async function handleAddSchedule(e) {
     e.preventDefault();
-    
+
+    const quantity = parseFloat(document.getElementById("quantity1").value) || null;
+
     const formData = {
         product_name: document.getElementById("product-name").value,
-        line: document.getElementById("line").value,
+        line: "",
         start_datetime: document.getElementById("start-datetime").value,
         end_datetime: document.getElementById("end-datetime").value || null,
-        quantity1: parseFloat(document.getElementById("quantity1").value) || null,
-        quantity2: parseFloat(document.getElementById("quantity2").value) || null,
-        quantity3: parseFloat(document.getElementById("quantity3").value) || null,
-        quantity4: parseFloat(document.getElementById("quantity4").value) || null,
-        quantity5: parseFloat(document.getElementById("quantity5").value) || null,
-        quantity6: parseFloat(document.getElementById("quantity6").value) || null,
-        quantity7: parseFloat(document.getElementById("quantity7").value) || null,
-        quantity8: parseFloat(document.getElementById("quantity8").value) || null,
-        total_quantity: parseFloat(document.getElementById("total-quantity").value) || null,
-        production_status: "予定"
+        quantity1: quantity,
+        quantity2: null,
+        quantity3: null,
+        quantity4: null,
+        quantity5: null,
+        quantity6: null,
+        quantity7: null,
+        quantity8: null,
+        total_quantity: quantity,
+        production_status: "予定",
+        notes: document.getElementById("notes").value || null
     };
 
     try {
@@ -322,44 +371,39 @@ async function handleAddSchedule(e) {
     }
 }
 
-// 総個数と終了時刻の計算
 function calculateTotals() {
-    let total = 0;
-    for (let i = 1; i <= 8; i++) {
-        const val = parseFloat(document.getElementById(`quantity${i}`).value) || 0;
-        total += val;
-    }
-    document.getElementById("total-quantity").value = total;
-
-    // 終了時刻計算
+    const quantity = parseFloat(document.getElementById("quantity1").value) || 0;
     const productName = document.getElementById("product-name").value;
     const startDatetime = document.getElementById("start-datetime").value;
     const efficiency = parseFloat(document.getElementById("efficiency").value) || 1;
     const weight = productWeights[productName] || 0;
 
-    if (startDatetime && total > 0 && weight > 0 && efficiency > 0) {
-        const productionTime = (total * weight / 1000) / efficiency * 60; // 分
+    if (startDatetime && quantity > 0 && weight > 0 && efficiency > 0) {
+        const productionTime = (quantity * weight / 1000) / efficiency * 60;
         const startDate = new Date(startDatetime);
         const endDate = new Date(startDate.getTime() + productionTime * 60 * 1000);
-        
+
         const endStr = endDate.toISOString().slice(0, 16);
         document.getElementById("end-datetime").value = endStr;
     }
 }
 
-// スケジュールテーブル描画
+// スケジュールテーブル描画（schedule_numberを使用）
 function renderScheduleTable() {
     const tbody = elements.scheduleTbody;
     tbody.innerHTML = "";
 
     schedules.forEach(schedule => {
         const tr = document.createElement("tr");
+        // schedule_numberを優先、なければkintone_record_id
+        const schedNo = schedule.schedule_number || schedule.kintone_record_id || "-";
         tr.innerHTML = `
+            <td>${schedNo}</td>
             <td>${schedule.product_name}</td>
-            <td>ライン${schedule.line}</td>
             <td>${formatDateTime(schedule.start_datetime)}</td>
             <td>${formatDateTime(schedule.end_datetime)}</td>
-            <td>${schedule.total_quantity || "-"}</td>
+            <td>${schedule.total_quantity || schedule.quantity1 || "-"}</td>
+            <td>${schedule.notes || "-"}</td>
             <td><span class="status-badge">${schedule.production_status}</span></td>
             <td><span class="status-badge ${schedule.sync_status}">${getSyncStatusText(schedule.sync_status)}</span></td>
             <td>
@@ -376,69 +420,50 @@ function renderGantt() {
     const timeline = container.querySelector(".gantt-timeline");
     const rows = container.querySelector(".gantt-rows");
 
-    // タイムラインヘッダー (6:00 ～ 翌6:00)
-    timeline.innerHTML = '<div style="width:100px;padding:8px;font-weight:bold;">日付</div>';
+    timeline.innerHTML = '<div style="width:100px;padding:10px;font-weight:bold;">日付</div>';
     for (let h = 6; h < 30; h++) {
         const hour = h % 24;
-        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:8px;border-left:1px solid #dee2e6;">${hour}:00</div>`;
+        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);">${hour}:00</div>`;
     }
 
-    // 日付ごとの行（5日分）
     rows.innerHTML = "";
-    
-    // currentDateを基準に表示開始日を設定（production date基準）
     const startDate = new Date(currentDate);
 
     for (let i = 0; i < 5; i++) {
         const rowDate = new Date(startDate);
         rowDate.setDate(startDate.getDate() + i);
-        
-        // production date文字列 (YYYY-MM-DD)
+
         const dateStr = formatIsoDate(rowDate);
         const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()}`;
 
         const row = document.createElement("div");
         row.className = "gantt-row";
         row.dataset.date = dateStr;
-        
-        // ラベルエリア
+
         const labelDiv = document.createElement("div");
         labelDiv.className = "gantt-row-label";
         labelDiv.textContent = displayDate;
         row.appendChild(labelDiv);
 
-        // コンテンツエリア
         const contentDiv = document.createElement("div");
         contentDiv.className = "gantt-row-content";
         contentDiv.id = `gantt-date-${dateStr}`;
         row.appendChild(contentDiv);
-        
+
         rows.appendChild(row);
 
-        // この日のスケジュールをフィルタ（6:00始まり基準）
-        // 判定ロジック: スケジュールの開始時間が、rowDateの6:00 ～ 翌6:00 に含まれるか
-        // または、rowDateは「生産日」としての扱いで、実時間は判定が必要
-        
         const rowStart = new Date(rowDate);
         rowStart.setHours(6, 0, 0, 0);
-        const rowEnd = new Date(rowStart.getTime() + 24 * 60 * 60 * 1000);
 
         const daySchedules = schedules.filter(s => {
             if (!s.start_datetime) return false;
             const sTime = new Date(s.start_datetime);
-            // 開始時間がこの日の範囲内にある、または
-            // 前日から続いていて終了時間がこの日の範囲内にある（今回は開始時間基準で簡易化）
-            // 厳密には productionDate(s.start_datetime) === rowDate
             return getProductionDateStr(sTime) === dateStr;
         });
 
-        // 重なり計算とレーン割り当て
         const lanes = calculateLanes(daySchedules);
-        
-        // 行の高さを調整 (レーン数 * バーの高さ + マージン)
-        // 基本高さ50px, 1レーン追加ごとに+40pxなど
         const laneCount = lanes.length > 0 ? lanes.length : 1;
-        row.style.height = `${Math.max(50, laneCount * 36 + 10)}px`;
+        row.style.height = `${Math.max(80, laneCount * 70 + 10)}px`;
 
         lanes.forEach((laneSchedules, laneIndex) => {
             laneSchedules.forEach(schedule => {
@@ -449,7 +474,6 @@ function renderGantt() {
     }
 }
 
-// 生産日判定（6:00区切り）
 function getProductionDateStr(date) {
     const d = new Date(date);
     if (d.getHours() < 6) {
@@ -464,26 +488,21 @@ function formatIsoDate(date) {
     return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
 }
 
-// レーン計算（重なり制御）
 function calculateLanes(schedules) {
     if (schedules.length === 0) return [];
 
-    // 開始時間順にソート
     const sorted = [...schedules].sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
-    const lanes = []; // Array of arrays of schedules
+    const lanes = [];
 
     for (const schedule of sorted) {
         const start = new Date(schedule.start_datetime).getTime();
-        
-        // 既存のレーンに入れられるか確認
         let placed = false;
         for (const lane of lanes) {
             const lastSchedule = lane[lane.length - 1];
-            // 終了時間取得（未設定なら+1時間）
-            const lastEnd = lastSchedule.end_datetime 
-                ? new Date(lastSchedule.end_datetime).getTime() 
+            const lastEnd = lastSchedule.end_datetime
+                ? new Date(lastSchedule.end_datetime).getTime()
                 : new Date(lastSchedule.start_datetime).getTime() + 60*60*1000;
-            
+
             if (start >= lastEnd) {
                 lane.push(schedule);
                 placed = true;
@@ -502,28 +521,26 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
     const bar = document.createElement("div");
     bar.className = "gantt-bar";
     bar.dataset.id = schedule.id;
-    
-    // 時間位置計算
+
     const startTime = new Date(schedule.start_datetime);
     const endTime = schedule.end_datetime ? new Date(schedule.end_datetime) : new Date(startTime.getTime() + 60*60*1000);
-    
-    // 基準時間(6:00)からの経過分
+
     const diffMs = startTime.getTime() - dayStart6AM.getTime();
     const startMinutes = diffMs / (1000 * 60);
 
     const durationMs = endTime.getTime() - startTime.getTime();
     const durationMinutes = durationMs / (1000 * 60);
 
-    const left = 100 + (startMinutes / 60) * 60; // 100px for label, 60px per hour
-    const width = Math.max((durationMinutes / 60) * 60, 10); // 最小幅10px
-    const top = 4 + laneIndex * 36; // 上部マージン4px, 1段36px
+    const left = (startMinutes / 60) * 60;
+    const width = Math.max((durationMinutes / 60) * 60, 60);
+    const top = 10 + laneIndex * 70;
 
     bar.style.left = left + "px";
     bar.style.width = width + "px";
     bar.style.top = top + "px";
-    
-    // ステータスに応じた色
-    if (schedule.production_status === "完了") {
+    bar.style.height = "60px";
+
+    if (schedule.production_status === "生産終了") {
         bar.classList.add("status-completed");
     } else if (schedule.production_status === "生産中") {
         bar.classList.add("status-inprogress");
@@ -531,23 +548,44 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
         bar.classList.add("status-pending");
     }
 
-    // テキスト表示
-    bar.textContent = schedule.product_name;
-    bar.title = `${schedule.product_name}\n${formatDateTime(schedule.start_datetime)} - ${formatDateTime(schedule.end_datetime)}\n総個数: ${schedule.total_quantity || "-"}`;
+    // schedule_numberを優先、なければkintone_record_id
+    const schedNo = schedule.schedule_number || schedule.kintone_record_id || "";
+    const productSpan = document.createElement("span");
+    productSpan.className = "bar-product";
+    productSpan.textContent = schedNo ? `[${schedNo}] ${schedule.product_name}` : schedule.product_name;
+    bar.appendChild(productSpan);
 
-    // ドラッグアンドドロップ設定
+    const qty = schedule.total_quantity || schedule.quantity1;
+    if (qty) {
+        const qtySpan = document.createElement("span");
+        qtySpan.className = "bar-quantity";
+        qtySpan.textContent = `${qty}個`;
+        bar.appendChild(qtySpan);
+    }
+
+    if (schedule.notes) {
+        const notesSpan = document.createElement("span");
+        notesSpan.className = "bar-notes";
+        notesSpan.textContent = schedule.notes;
+        bar.appendChild(notesSpan);
+    }
+
+    let tooltip = `No.${schedNo} ${schedule.product_name}\n`;
+    tooltip += `${formatDateTime(schedule.start_datetime)} - ${formatDateTime(schedule.end_datetime)}\n`;
+    tooltip += `個数: ${qty || "-"}`;
+    if (schedule.notes) {
+        tooltip += `\n備考: ${schedule.notes}`;
+    }
+    bar.title = tooltip;
+
     setupDraggable(bar, schedule, durationMs, dayStart6AM);
 
     return bar;
 }
 
-
-
-
-// kintone設定保存
 async function handleSaveSettings(e) {
     e.preventDefault();
-    
+
     const config = {
         subdomain: document.getElementById("subdomain").value,
         app_id: parseInt(document.getElementById("app-id").value),
@@ -568,7 +606,6 @@ async function handleSaveSettings(e) {
     }
 }
 
-// kintoneから取得
 async function handleSyncFromKintone() {
     setStatus("kintoneからデータを取得中...");
     try {
@@ -576,6 +613,7 @@ async function handleSyncFromKintone() {
         if (response.success) {
             setStatus(`${response.data}件のレコードを同期しました`);
             await loadSchedules();
+            renderGantt();
         } else {
             setStatus("取得エラー: " + response.error, true);
         }
@@ -584,7 +622,6 @@ async function handleSyncFromKintone() {
     }
 }
 
-// kintoneへ送信
 async function handleSyncToKintone() {
     setStatus("kintoneへデータを送信中...");
     try {
@@ -600,33 +637,26 @@ async function handleSyncToKintone() {
     }
 }
 
-// テストデータ生成
 async function handleGenerateTestData() {
-    if (!confirm("現在のデータを保持したままテストデータを追加しますか？")) return;
+    if (!confirm("テストデータを追加しますか？")) return;
 
     setStatus("テストデータを生成中...");
-    
+
     const products = ["FS450D", "FS450K", "FS021", "小袋", "FS360F"];
-    const lines = ["1", "2", "3"];
-    
-    // 今日から3日間
     const baseDate = new Date();
     baseDate.setHours(8, 0, 0, 0);
 
     const testSchedules = [];
 
-    for (let i = 0; i < 5; i++) { // 5件作成
-        const dayOffset = Math.floor(i / 2); // 0, 0, 1, 1, 2...
+    for (let i = 0; i < 5; i++) {
+        const dayOffset = Math.floor(i / 2);
         const date = new Date(baseDate);
         date.setDate(date.getDate() + dayOffset);
-        
-        // 開始時間をずらす
-        date.setHours(8 + (i % 2) * 4); // 8:00, 12:00...
+        date.setHours(8 + (i % 2) * 4);
 
         const product = products[i % products.length];
-        const line = lines[i % lines.length];
         const quantity = 100 * (i + 1);
-        
+
         const durationHours = quantity / 100;
         const endDate = new Date(date);
         endDate.setTime(date.getTime() + durationHours * 60 * 60 * 1000);
@@ -636,11 +666,13 @@ async function handleGenerateTestData() {
 
         testSchedules.push({
             product_name: product,
-            line: line,
+            line: "",
             start_datetime: fmt(date),
             end_datetime: fmt(endDate),
+            quantity1: quantity,
             total_quantity: quantity,
-            production_status: "予定"
+            production_status: "予定",
+            notes: `テスト${i + 1}`
         });
     }
 
@@ -659,7 +691,6 @@ async function handleGenerateTestData() {
     renderGantt();
 }
 
-// ユーティリティ関数
 function formatDateTime(dateStr) {
     if (!dateStr) return "-";
     const date = new Date(dateStr);

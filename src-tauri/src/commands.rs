@@ -17,6 +17,7 @@ pub struct AppState {
 #[derive(Debug, Deserialize)]
 pub struct AddScheduleRequest {
     pub product_name: String,
+    #[serde(default)]
     pub line: String,
     pub start_datetime: String,
     pub end_datetime: Option<String>,
@@ -30,6 +31,7 @@ pub struct AddScheduleRequest {
     pub quantity8: Option<f64>,
     pub total_quantity: Option<f64>,
     pub production_status: Option<String>,
+    pub notes: Option<String>,
 }
 
 /// kintone設定リクエスト
@@ -79,10 +81,11 @@ pub fn get_schedules(state: State<AppState>) -> ApiResponse<Vec<LocalSchedule>> 
 pub fn add_schedule(request: AddScheduleRequest, state: State<AppState>) -> ApiResponse<i64> {
     let db = state.db.lock().unwrap();
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    
+
     let schedule = LocalSchedule {
         id: None,
         kintone_record_id: None,
+        schedule_number: None,
         product_name: request.product_name,
         line: request.line,
         start_datetime: request.start_datetime,
@@ -97,6 +100,7 @@ pub fn add_schedule(request: AddScheduleRequest, state: State<AppState>) -> ApiR
         quantity8: request.quantity8,
         total_quantity: request.total_quantity,
         production_status: request.production_status.unwrap_or("予定".to_string()),
+        notes: request.notes,
         sync_status: "pending".to_string(),
         created_at: now.clone(),
         updated_at: now,
@@ -161,6 +165,34 @@ pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>)
     }
 }
 
+/// 文字列またはnullの値を取得するヘルパー
+fn get_string_value(record: &serde_json::Value, field: &str) -> String {
+    if let Some(field_obj) = record.get(field) {
+        if let Some(val) = field_obj.get("value") {
+            match val {
+                serde_json::Value::String(s) => return s.clone(),
+                serde_json::Value::Null => return String::new(),
+                _ => return val.to_string(),
+            }
+        }
+    }
+    String::new()
+}
+
+/// 数値フィールドの値を取得するヘルパー
+fn get_number_value(record: &serde_json::Value, field: &str) -> Option<f64> {
+    if let Some(field_obj) = record.get(field) {
+        if let Some(val) = field_obj.get("value") {
+            match val {
+                serde_json::Value::String(s) if !s.is_empty() => return s.parse().ok(),
+                serde_json::Value::Number(n) => return n.as_f64(),
+                _ => return None,
+            }
+        }
+    }
+    None
+}
+
 /// kintoneからスケジュールを取得して保存
 #[tauri::command]
 pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u32>, ()> {
@@ -168,48 +200,88 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
         let kintone = state.kintone_client.lock().unwrap();
         kintone.clone()
     };
-    
+
     if let Some(client) = client_opt {
         match client.get_records(None).await {
-            Ok(records) => {
+            Ok(json) => {
+                let records = json["records"].as_array().cloned().unwrap_or_default();
+
+                eprintln!("=== Processing {} records ===", records.len());
+
+                // 最初のレコードの全フィールドを出力
+                if let Some(first_record) = records.first() {
+                    eprintln!("=== First record fields ===");
+                    if let Some(obj) = first_record.as_object() {
+                        for (key, _) in obj.iter() {
+                            eprintln!("  Field: {}", key);
+                        }
+                    }
+                }
+
                 let mut count = 0;
                 let db = state.db.lock().unwrap();
-                
-                for record in records {
-                    // kintoneのJSONからLocalScheduleに変換
-                    // 注意: フィールド名はkintoneアプリの設定に依存
-                    let kintone_id = record["$id"]["value"].as_str().unwrap_or("0").parse().unwrap_or(0);
-                    let product_name = record["製品名"]["value"].as_str().unwrap_or("").to_string();
-                    
-                    if product_name.is_empty() { continue; }
 
-                    let line = record["ライン名"]["value"].as_str().unwrap_or("").to_string();
-                    let start_datetime = record["開始日時1"]["value"].as_str().unwrap_or("").to_string();
-                    let end_datetime = record["総終了日時"]["value"].as_str().map(|s| s.to_string());
-                    
-                    let get_qty = |key: &str| -> Option<f64> {
-                        record[key]["value"].as_str().and_then(|s| s.parse().ok())
+                for record in records {
+                    let kintone_id: u32 = get_string_value(&record, "$id").parse().unwrap_or(0);
+
+                    // スケジュール番号フィールドを取得
+                    let schedule_number_str = get_string_value(&record, "スケジュール番号");
+                    let schedule_number = if schedule_number_str.is_empty() { None } else { Some(schedule_number_str) };
+
+                    // 製品名を取得（SINGLE_LINE_TEXT）
+                    let product_name = get_string_value(&record, "製品名");
+
+                    // 製品名が空なら品名を試す
+                    let product_name = if product_name.is_empty() {
+                        get_string_value(&record, "品名")
+                    } else {
+                        product_name
                     };
+
+                    if product_name.is_empty() {
+                        eprintln!("  Record {}: skipped (empty product name)", kintone_id);
+                        continue;
+                    }
+
+                    // 分類（ライン名）- SINGLE_LINE_TEXT
+                    let line = get_string_value(&record, "分類");
+
+                    // 開始日時1 - DATETIME
+                    let start_datetime = get_string_value(&record, "開始日時1");
+
+                    // 総終了日時 - DATETIME
+                    let end_datetime_str = get_string_value(&record, "総終了日時");
+                    let end_datetime = if end_datetime_str.is_empty() { None } else { Some(end_datetime_str) };
+
+                    // 生産状況 - DROP_DOWN (nullの場合がある)
+                    let production_status = get_string_value(&record, "生産状況");
+                    let production_status = if production_status.is_empty() { "予定".to_string() } else { production_status };
+
+                    // 内製造備考1 - SINGLE_LINE_TEXT
+                    let notes_str = get_string_value(&record, "内製造備考1");
+                    let notes = if notes_str.is_empty() { None } else { Some(notes_str) };
 
                     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
                     let schedule = LocalSchedule {
                         id: None,
                         kintone_record_id: Some(kintone_id),
-                        product_name,
+                        schedule_number: schedule_number.clone(),
+                        product_name: product_name.clone(),
                         line,
                         start_datetime,
                         end_datetime,
-                        quantity1: get_qty("生産数量1"),
-                        quantity2: get_qty("生産数量2"),
-                        quantity3: get_qty("生産数量3"),
-                        quantity4: get_qty("生産数量4"),
-                        quantity5: get_qty("生産数量5"),
-                        quantity6: get_qty("生産数量6"),
-                        quantity7: get_qty("生産数量7"),
-                        quantity8: get_qty("生産数量8"),
-                        total_quantity: get_qty("総個数"),
-                        production_status: "予定".to_string(), // kintoneにステータスフィールドがあればそれを使う
+                        quantity1: get_number_value(&record, "生産数量1"),
+                        quantity2: get_number_value(&record, "生産数量2"),
+                        quantity3: get_number_value(&record, "生産数量3"),
+                        quantity4: get_number_value(&record, "生産数量4"),
+                        quantity5: get_number_value(&record, "生産数量5"),
+                        quantity6: get_number_value(&record, "生産数量6"),
+                        quantity7: get_number_value(&record, "生産数量7"),
+                        quantity8: get_number_value(&record, "生産数量8"),
+                        total_quantity: get_number_value(&record, "総個数"),
+                        production_status,
+                        notes,
                         sync_status: "synced".to_string(),
                         created_at: now.clone(),
                         updated_at: now,
@@ -217,8 +289,11 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
 
                     if db.import_from_kintone(&schedule).is_ok() {
                         count += 1;
+                        eprintln!("  Record {}: imported ({}) schedule_no={:?}", kintone_id, product_name, schedule_number);
                     }
                 }
+
+                eprintln!("=== Imported {} records ===", count);
 
                 Ok(ApiResponse {
                     success: true,
@@ -226,11 +301,14 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     error: None,
                 })
             },
-            Err(e) => Ok(ApiResponse {
-                success: false,
-                data: None,
-                error: Some(e.to_string()),
-            }),
+            Err(e) => {
+                eprintln!("=== kintone API Error: {} ===", e);
+                Ok(ApiResponse {
+                    success: false,
+                    data: None,
+                    error: Some(e.to_string()),
+                })
+            }
         }
     } else {
         Ok(ApiResponse {
@@ -253,37 +331,34 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
         let kintone = state.kintone_client.lock().unwrap();
         kintone.clone()
     };
-    
+
     if let Some(client) = client_opt {
         let mut synced_count = 0u32;
-        
+
         for schedule in pending_schedules {
-            // kintoneレコード形式に変換
             let record = serde_json::json!({
                 "製品名": { "value": schedule.product_name },
-                "ライン名": { "value": schedule.line },
+                "分類": { "value": schedule.line },
                 "開始日時1": { "value": schedule.start_datetime },
                 "総終了日時": { "value": schedule.end_datetime },
-                "生産数量1": { "value": schedule.quantity1 },
-                "生産数量2": { "value": schedule.quantity2 },
-                "生産数量3": { "value": schedule.quantity3 },
-                "生産数量4": { "value": schedule.quantity4 },
-                "生産数量5": { "value": schedule.quantity5 },
-                "生産数量6": { "value": schedule.quantity6 },
-                "生産数量7": { "value": schedule.quantity7 },
-                "生産数量8": { "value": schedule.quantity8 },
-                "総個数": { "value": schedule.total_quantity },
+                "生産数量1": { "value": schedule.quantity1.map(|v| v.to_string()) },
+                "生産数量2": { "value": schedule.quantity2.map(|v| v.to_string()) },
+                "生産数量3": { "value": schedule.quantity3.map(|v| v.to_string()) },
+                "生産数量4": { "value": schedule.quantity4.map(|v| v.to_string()) },
+                "生産数量5": { "value": schedule.quantity5.map(|v| v.to_string()) },
+                "生産数量6": { "value": schedule.quantity6.map(|v| v.to_string()) },
+                "生産数量7": { "value": schedule.quantity7.map(|v| v.to_string()) },
+                "生産数量8": { "value": schedule.quantity8.map(|v| v.to_string()) },
+                "総個数": { "value": schedule.total_quantity.map(|v| v.to_string()) },
             });
 
             if let Some(kintone_id) = schedule.kintone_record_id {
-                // 既存レコードを更新
                 if client.update_record(kintone_id, record).await.is_ok() {
                     let db = state.db.lock().unwrap();
                     let _ = db.update_sync_status(schedule.id.unwrap(), "synced", Some(kintone_id));
                     synced_count += 1;
                 }
             } else {
-                // 新規レコードを追加
                 if let Ok(new_id) = client.add_record(record).await {
                     let db = state.db.lock().unwrap();
                     let _ = db.update_sync_status(schedule.id.unwrap(), "synced", Some(new_id));

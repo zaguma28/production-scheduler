@@ -46,7 +46,7 @@ impl KintoneClient {
     pub fn new(config: KintoneConfig) -> Result<Self> {
         let client = Client::builder()
             .build()?;
-        
+
         Ok(Self { client, config })
     }
 
@@ -56,13 +56,13 @@ impl KintoneClient {
     }
 
     /// レコードを取得
-    pub async fn get_records(&self, query: Option<&str>) -> Result<Vec<serde_json::Value>> {
+    pub async fn get_records(&self, query: Option<&str>) -> Result<serde_json::Value> {
         let url = format!("{}/records.json", self.base_url());
-        
+
         let mut params = vec![
             ("app", self.config.app_id.to_string()),
         ];
-        
+
         if let Some(q) = query {
             params.push(("query", q.to_string()));
         }
@@ -74,18 +74,23 @@ impl KintoneClient {
             .send()
             .await?;
 
-        let json: serde_json::Value = response.json().await?;
+        let status = response.status();
+        let text = response.text().await?;
         
-        Ok(json["records"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default())
+        eprintln!("=== kintone API Response ===");
+        eprintln!("Status: {}", status);
+        eprintln!("Body: {}", &text[..text.len().min(2000)]);
+        eprintln!("============================");
+
+        let json: serde_json::Value = serde_json::from_str(&text)?;
+
+        Ok(json)
     }
 
     /// レコードを追加
     pub async fn add_record(&self, record: serde_json::Value) -> Result<u32> {
         let url = format!("{}/record.json", self.base_url());
-        
+
         let body = serde_json::json!({
             "app": self.config.app_id,
             "record": record
@@ -100,14 +105,14 @@ impl KintoneClient {
             .await?;
 
         let json: serde_json::Value = response.json().await?;
-        
+
         Ok(json["id"].as_str().unwrap_or("0").parse().unwrap_or(0))
     }
 
     /// レコードを更新
     pub async fn update_record(&self, record_id: u32, record: serde_json::Value) -> Result<()> {
         let url = format!("{}/record.json", self.base_url());
-        
+
         let body = serde_json::json!({
             "app": self.config.app_id,
             "id": record_id,
@@ -128,7 +133,7 @@ impl KintoneClient {
     /// 複数レコードを一括更新
     pub async fn update_records(&self, records: Vec<serde_json::Value>) -> Result<()> {
         let url = format!("{}/records.json", self.base_url());
-        
+
         let body = serde_json::json!({
             "app": self.config.app_id,
             "records": records

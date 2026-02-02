@@ -3,13 +3,13 @@
 
 use rusqlite::{Connection, Result, params};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 /// ローカルスケジュールレコード
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalSchedule {
     pub id: Option<i64>,
     pub kintone_record_id: Option<u32>,
+    pub schedule_number: Option<String>,  // kintoneのスケジュール番号フィールド
     pub product_name: String,
     pub line: String,
     pub start_datetime: String,
@@ -24,7 +24,8 @@ pub struct LocalSchedule {
     pub quantity8: Option<f64>,
     pub total_quantity: Option<f64>,
     pub production_status: String,
-    pub sync_status: String, // "pending", "synced", "modified"
+    pub notes: Option<String>,
+    pub sync_status: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -49,6 +50,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS schedules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 kintone_record_id INTEGER,
+                schedule_number TEXT,
                 product_name TEXT NOT NULL,
                 line TEXT NOT NULL,
                 start_datetime TEXT NOT NULL,
@@ -63,12 +65,19 @@ impl Database {
                 quantity8 REAL,
                 total_quantity REAL,
                 production_status TEXT DEFAULT '予定',
+                notes TEXT,
                 sync_status TEXT DEFAULT 'pending',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
             [],
         )?;
+
+        // schedule_numberカラムがなければ追加
+        let _ = self.conn.execute(
+            "ALTER TABLE schedules ADD COLUMN schedule_number TEXT",
+            [],
+        );
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS kintone_config (
@@ -114,12 +123,13 @@ impl Database {
     pub fn add_schedule(&self, schedule: &LocalSchedule) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO schedules (
-                kintone_record_id, product_name, line, start_datetime, end_datetime,
+                kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                 quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                total_quantity, production_status, sync_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                total_quantity, production_status, notes, sync_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             params![
                 schedule.kintone_record_id,
+                schedule.schedule_number,
                 schedule.product_name,
                 schedule.line,
                 schedule.start_datetime,
@@ -134,6 +144,7 @@ impl Database {
                 schedule.quantity8,
                 schedule.total_quantity,
                 schedule.production_status,
+                schedule.notes,
                 schedule.sync_status,
                 schedule.created_at,
                 schedule.updated_at,
@@ -145,33 +156,35 @@ impl Database {
     /// すべてのスケジュールを取得
     pub fn get_all_schedules(&self) -> Result<Vec<LocalSchedule>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, kintone_record_id, product_name, line, start_datetime, end_datetime,
+            "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, sync_status, created_at, updated_at
+                    total_quantity, production_status, notes, sync_status, created_at, updated_at
              FROM schedules ORDER BY start_datetime"
         )?;
-        
+
         let schedules = stmt.query_map([], |row| {
             Ok(LocalSchedule {
                 id: row.get(0)?,
                 kintone_record_id: row.get(1)?,
-                product_name: row.get(2)?,
-                line: row.get(3)?,
-                start_datetime: row.get(4)?,
-                end_datetime: row.get(5)?,
-                quantity1: row.get(6)?,
-                quantity2: row.get(7)?,
-                quantity3: row.get(8)?,
-                quantity4: row.get(9)?,
-                quantity5: row.get(10)?,
-                quantity6: row.get(11)?,
-                quantity7: row.get(12)?,
-                quantity8: row.get(13)?,
-                total_quantity: row.get(14)?,
-                production_status: row.get(15)?,
-                sync_status: row.get(16)?,
-                created_at: row.get(17)?,
-                updated_at: row.get(18)?,
+                schedule_number: row.get(2)?,
+                product_name: row.get(3)?,
+                line: row.get(4)?,
+                start_datetime: row.get(5)?,
+                end_datetime: row.get(6)?,
+                quantity1: row.get(7)?,
+                quantity2: row.get(8)?,
+                quantity3: row.get(9)?,
+                quantity4: row.get(10)?,
+                quantity5: row.get(11)?,
+                quantity6: row.get(12)?,
+                quantity7: row.get(13)?,
+                quantity8: row.get(14)?,
+                total_quantity: row.get(15)?,
+                production_status: row.get(16)?,
+                notes: row.get(17)?,
+                sync_status: row.get(18)?,
+                created_at: row.get(19)?,
+                updated_at: row.get(20)?,
             })
         })?;
 
@@ -181,33 +194,35 @@ impl Database {
     /// 同期待ちスケジュールを取得
     pub fn get_pending_schedules(&self) -> Result<Vec<LocalSchedule>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, kintone_record_id, product_name, line, start_datetime, end_datetime,
+            "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, sync_status, created_at, updated_at
+                    total_quantity, production_status, notes, sync_status, created_at, updated_at
              FROM schedules WHERE sync_status = 'pending' OR sync_status = 'modified'"
         )?;
-        
+
         let schedules = stmt.query_map([], |row| {
             Ok(LocalSchedule {
                 id: row.get(0)?,
                 kintone_record_id: row.get(1)?,
-                product_name: row.get(2)?,
-                line: row.get(3)?,
-                start_datetime: row.get(4)?,
-                end_datetime: row.get(5)?,
-                quantity1: row.get(6)?,
-                quantity2: row.get(7)?,
-                quantity3: row.get(8)?,
-                quantity4: row.get(9)?,
-                quantity5: row.get(10)?,
-                quantity6: row.get(11)?,
-                quantity7: row.get(12)?,
-                quantity8: row.get(13)?,
-                total_quantity: row.get(14)?,
-                production_status: row.get(15)?,
-                sync_status: row.get(16)?,
-                created_at: row.get(17)?,
-                updated_at: row.get(18)?,
+                schedule_number: row.get(2)?,
+                product_name: row.get(3)?,
+                line: row.get(4)?,
+                start_datetime: row.get(5)?,
+                end_datetime: row.get(6)?,
+                quantity1: row.get(7)?,
+                quantity2: row.get(8)?,
+                quantity3: row.get(9)?,
+                quantity4: row.get(10)?,
+                quantity5: row.get(11)?,
+                quantity6: row.get(12)?,
+                quantity7: row.get(13)?,
+                quantity8: row.get(14)?,
+                total_quantity: row.get(15)?,
+                production_status: row.get(16)?,
+                notes: row.get(17)?,
+                sync_status: row.get(18)?,
+                created_at: row.get(19)?,
+                updated_at: row.get(20)?,
             })
         })?;
 
@@ -228,7 +243,7 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT weight_kg FROM product_master WHERE product_name = ?1"
         )?;
-        
+
         let weight: Option<f64> = stmt.query_row(params![product_name], |row| row.get(0)).ok();
         Ok(weight)
     }
@@ -255,27 +270,28 @@ impl Database {
         if exists {
             // 更新
             self.conn.execute(
-                "UPDATE schedules SET 
-                    product_name = ?1, line = ?2, start_datetime = ?3, end_datetime = ?4,
-                    quantity1 = ?5, quantity2 = ?6, quantity3 = ?7, quantity4 = ?8, quantity5 = ?9, quantity6 = ?10, quantity7 = ?11, quantity8 = ?12,
-                    total_quantity = ?13, production_status = ?14, sync_status = 'synced', updated_at = datetime('now')
-                WHERE kintone_record_id = ?15",
+                "UPDATE schedules SET
+                    schedule_number = ?1, product_name = ?2, line = ?3, start_datetime = ?4, end_datetime = ?5,
+                    quantity1 = ?6, quantity2 = ?7, quantity3 = ?8, quantity4 = ?9, quantity5 = ?10, quantity6 = ?11, quantity7 = ?12, quantity8 = ?13,
+                    total_quantity = ?14, production_status = ?15, notes = ?16, sync_status = 'synced', updated_at = datetime('now')
+                WHERE kintone_record_id = ?17",
                 params![
-                    schedule.product_name, schedule.line, schedule.start_datetime, schedule.end_datetime,
+                    schedule.schedule_number, schedule.product_name, schedule.line, schedule.start_datetime, schedule.end_datetime,
                     schedule.quantity1, schedule.quantity2, schedule.quantity3, schedule.quantity4, schedule.quantity5, schedule.quantity6, schedule.quantity7, schedule.quantity8,
-                    schedule.total_quantity, schedule.production_status, schedule.kintone_record_id
+                    schedule.total_quantity, schedule.production_status, schedule.notes, schedule.kintone_record_id
                 ],
             )?;
         } else {
             // 新規追加
             self.conn.execute(
                 "INSERT INTO schedules (
-                    kintone_record_id, product_name, line, start_datetime, end_datetime,
+                    kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
-                    total_quantity, production_status, sync_status, created_at, updated_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'synced', datetime('now'), datetime('now'))",
+                    total_quantity, production_status, notes, sync_status, created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'synced', datetime('now'), datetime('now'))",
                 params![
                     schedule.kintone_record_id,
+                    schedule.schedule_number,
                     schedule.product_name,
                     schedule.line,
                     schedule.start_datetime,
@@ -289,7 +305,8 @@ impl Database {
                     schedule.quantity7,
                     schedule.quantity8,
                     schedule.total_quantity,
-                    schedule.production_status
+                    schedule.production_status,
+                    schedule.notes
                 ],
             )?;
         }
