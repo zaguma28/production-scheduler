@@ -116,13 +116,13 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
 
     // kintoneにレコードを追加
     let record = serde_json::json!({
-        "製品名": { "value": request.product_name },
-        "分類": { "value": request.line },
-        "開始日時1": { "value": request.start_datetime },
-        "総終了日時": { "value": request.end_datetime },
-        "生産数量1": { "value": request.quantity1.map(|v| v.to_string()) },
-        "総個数": { "value": request.total_quantity.map(|v| v.to_string()) },
-        "生産状況": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
+        "product_name": { "value": request.product_name },
+        "line": { "value": request.line },
+        "start_datetime": { "value": request.start_datetime },
+        "end_datetime": { "value": request.end_datetime },
+        "quantity": { "value": request.quantity1.map(|v| v.to_string()) },
+        "total_quantity": { "value": request.total_quantity.map(|v| v.to_string()) },
+        "status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
     });
 
     let kintone_id = match client.add_record(record).await {
@@ -370,11 +370,11 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     let schedule_number = get_optional_string_value(&record, "スケジュール番号");
 
                     // 製品名を取得（SINGLE_LINE_TEXT）
-                    let product_name = get_string_value(&record, "製品名");
+                    let product_name = get_string_value(&record, "product_name");
 
                     // 製品名が空なら品名を試す
                     let product_name = if product_name.is_empty() {
-                        get_string_value(&record, "品名")
+                        get_string_value(&record, "product_name")
                     } else {
                         product_name
                     };
@@ -385,16 +385,16 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     }
 
                     // 分類（ライン名）- SINGLE_LINE_TEXT
-                    let line = get_string_value(&record, "分類");
+                    let line = get_string_value(&record, "line");
 
                     // 開始日時1 - DATETIME
-                    let start_datetime = get_string_value(&record, "開始日時1");
+                    let start_datetime = get_string_value(&record, "start_datetime");
 
                     // 総終了日時 - DATETIME
-                    let end_datetime = get_optional_string_value(&record, "総終了日時");
+                    let end_datetime = get_optional_string_value(&record, "end_datetime");
 
                     // 生産状況 - DROP_DOWN (nullの場合がある)
-                    let production_status = get_string_value(&record, "生産状況");
+                    let production_status = get_string_value(&record, "status");
                     let production_status = if production_status.is_empty() { "予定".to_string() } else { production_status };
 
                     // 内製造備考1 - SINGLE_LINE_TEXT
@@ -420,7 +420,7 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                         line,
                         start_datetime,
                         end_datetime,
-                        quantity1: get_number_value(&record, "生産数量1"),
+                        quantity1: get_number_value(&record, "quantity"),
                         quantity2: get_number_value(&record, "生産数量2"),
                         quantity3: get_number_value(&record, "生産数量3"),
                         quantity4: get_number_value(&record, "生産数量4"),
@@ -428,7 +428,7 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                         quantity6: get_number_value(&record, "生産数量6"),
                         quantity7: get_number_value(&record, "生産数量7"),
                         quantity8: get_number_value(&record, "生産数量8"),
-                        total_quantity: get_number_value(&record, "総個数"),
+                        total_quantity: get_number_value(&record, "total_quantity"),
                         efficiency1: efficiency1.clone(),
                         efficiency2,
                         efficiency3,
@@ -494,27 +494,13 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
 
         for schedule in pending_schedules {
             let record = serde_json::json!({
-                "製品名": { "value": schedule.product_name },
-                "分類": { "value": schedule.line },
-                "開始日時1": { "value": schedule.start_datetime },
-                "総終了日時": { "value": schedule.end_datetime },
-                "生産数量1": { "value": schedule.quantity1.map(|v| v.to_string()) },
-                "生産数量2": { "value": schedule.quantity2.map(|v| v.to_string()) },
-                "生産数量3": { "value": schedule.quantity3.map(|v| v.to_string()) },
-                "生産数量4": { "value": schedule.quantity4.map(|v| v.to_string()) },
-                "生産数量5": { "value": schedule.quantity5.map(|v| v.to_string()) },
-                "生産数量6": { "value": schedule.quantity6.map(|v| v.to_string()) },
-                "生産数量7": { "value": schedule.quantity7.map(|v| v.to_string()) },
-                "生産数量8": { "value": schedule.quantity8.map(|v| v.to_string()) },
-                "総個数": { "value": schedule.total_quantity.map(|v| v.to_string()) },
-                "製綿能率1": { "value": schedule.efficiency1 },
-                "製綿能率2": { "value": schedule.efficiency2 },
-                "製綿能率3": { "value": schedule.efficiency3 },
-                "製綿能率4": { "value": schedule.efficiency4 },
-                "製綿能率5": { "value": schedule.efficiency5 },
-                "製綿能率6": { "value": schedule.efficiency6 },
-                "製綿能率7": { "value": schedule.efficiency7 },
-                "製綿能率8": { "value": schedule.efficiency8 },
+                "product_name": { "value": schedule.product_name },
+                "line": { "value": schedule.line },
+                "start_datetime": { "value": schedule.start_datetime },
+                "end_datetime": { "value": schedule.end_datetime },
+                "quantity": { "value": schedule.quantity1.map(|v| v.to_string()) },
+                "total_quantity": { "value": schedule.total_quantity.map(|v| v.to_string()) },
+                "status": { "value": schedule.production_status.clone() },
             });
 
             if let Some(kintone_id) = schedule.kintone_record_id {
