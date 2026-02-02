@@ -10,12 +10,15 @@ name = "production_scheduler_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-# デフォルトは管理者モード
-default = ["admin-mode"]
+# デフォルトは管理者モード + kintone即時同期
+default = ["admin-mode", "kintone-immediate-sync"]
 # 管理者モード（全機能）
 admin-mode = []
 # 作業者モード（閲覧のみ）
 worker-mode = []
+# kintone即時同期（追加時にkintoneに即座に送信）
+# このfeatureを無効にするとローカルのみ保存になります
+kintone-immediate-sync = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

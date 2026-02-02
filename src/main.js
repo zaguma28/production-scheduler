@@ -504,7 +504,7 @@ function calculateTotals() {
         const startDate = new Date(startDatetime);
         const endDate = new Date(startDate.getTime() + productionTime * 60 * 1000);
 
-        const endStr = endDate.toISOString().slice(0, 16);
+        const endStr = formatDateTimeForInput(endDate);
         document.getElementById("end-datetime").value = endStr;
     }
 }
@@ -1012,6 +1012,9 @@ function setStatus(message, isError = false) {
     elements.statusMessage.textContent = message;
     elements.statusMessage.style.color = isError ? "#ff6b6b" : "#ccc";
 }
+
+
+
 
 
 

@@ -76,27 +76,9 @@ pub fn get_schedules(state: State<AppState>) -> ApiResponse<Vec<LocalSchedule>> 
     }
 }
 
-/// スケジュールを追加（kintone即時同期版）
-/// kintone-immediate-sync feature が有効な場合はkintoneに即座に追加
-/// 無効な場合はローカルDBのみに保存（後でsync_to_kintoneで同期）
+/// スケジュールを追加（kintone即時同期）
 #[tauri::command]
 pub async fn add_schedule(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
-    #[cfg(feature = "kintone-immediate-sync")]
-    {
-        // 方法B: kintone即時同期
-        add_schedule_with_kintone_sync(request, state).await
-    }
-    
-    #[cfg(not(feature = "kintone-immediate-sync"))]
-    {
-        // 方法A: ローカルのみ保存（後で同期）
-        add_schedule_local_only(request, state)
-    }
-}
-
-/// 方法B: kintone即時同期版
-#[cfg(feature = "kintone-immediate-sync")]
-async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
     // kintoneクライアントを取得
     let client_opt = {
         let kintone = state.kintone_client.lock().unwrap();
@@ -186,57 +168,6 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
         production_status: request.production_status.unwrap_or("未生産".to_string()),
         notes: request.notes,
         sync_status: "synced".to_string(),
-        created_at: now.clone(),
-        updated_at: now,
-    };
-
-    let db = state.db.lock().unwrap();
-    match db.add_schedule(&schedule) {
-        Ok(id) => Ok(ApiResponse {
-            success: true,
-            data: Some(id),
-            error: None,
-        }),
-        Err(e) => Ok(ApiResponse {
-            success: false,
-            data: None,
-            error: Some(e.to_string()),
-        }),
-    }
-}
-
-/// 方法A: ローカルのみ保存版（後でsync_to_kintoneで同期）
-#[cfg(not(feature = "kintone-immediate-sync"))]
-fn add_schedule_local_only(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
-    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let schedule = LocalSchedule {
-        id: None,
-        kintone_record_id: None,
-        schedule_number: None,
-        product_name: request.product_name,
-        line: request.line,
-        start_datetime: request.start_datetime,
-        end_datetime: request.end_datetime,
-        quantity1: request.quantity1,
-        quantity2: request.quantity2,
-        quantity3: request.quantity3,
-        quantity4: request.quantity4,
-        quantity5: request.quantity5,
-        quantity6: request.quantity6,
-        quantity7: request.quantity7,
-        quantity8: request.quantity8,
-        total_quantity: request.total_quantity,
-        efficiency1: None,
-        efficiency2: None,
-        efficiency3: None,
-        efficiency4: None,
-        efficiency5: None,
-        efficiency6: None,
-        efficiency7: None,
-        efficiency8: None,
-        production_status: request.production_status.unwrap_or("未生産".to_string()),
-        notes: request.notes,
-        sync_status: "pending".to_string(),
         created_at: now.clone(),
         updated_at: now,
     };
@@ -606,6 +537,4 @@ pub fn get_app_mode() -> ApiResponse<String> {
         error: None,
     }
 }
-
-
 

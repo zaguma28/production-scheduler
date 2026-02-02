@@ -96,6 +96,10 @@ impl KintoneClient {
             "record": record
         });
 
+        eprintln!("=== kintone add_record request ===");
+        eprintln!("URL: {}", url);
+        eprintln!("Body: {}", serde_json::to_string_pretty(&body).unwrap_or_default());
+
         let response = self.client
             .post(&url)
             .header("X-Cybozu-API-Token", &self.config.api_token)
@@ -104,9 +108,22 @@ impl KintoneClient {
             .send()
             .await?;
 
-        let json: serde_json::Value = response.json().await?;
+        let status = response.status();
+        let text = response.text().await?;
+        
+        eprintln!("=== kintone add_record response ===");
+        eprintln!("Status: {}", status);
+        eprintln!("Body: {}", text);
 
-        Ok(json["id"].as_str().unwrap_or("0").parse().unwrap_or(0))
+        if !status.is_success() {
+            return Err(anyhow::anyhow!("kintone API error: {} - {}", status, text));
+        }
+
+        let json: serde_json::Value = serde_json::from_str(&text)?;
+        let id = json["id"].as_str().unwrap_or("0").parse().unwrap_or(0);
+        
+        eprintln!("=== Created record ID: {} ===", id);
+        Ok(id)
     }
 
     /// レコードを更新
@@ -149,4 +166,23 @@ impl KintoneClient {
 
         Ok(())
     }
+
+    /// 単一レコードを取得
+    pub async fn get_record(&self, record_id: u32) -> Result<serde_json::Value> {
+        let url = format!("{}/record.json", self.base_url());
+
+        let response = self.client
+            .get(&url)
+            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .query(&[
+                ("app", self.config.app_id.to_string()),
+                ("id", record_id.to_string()),
+            ])
+            .send()
+            .await?;
+
+        let json: serde_json::Value = response.json().await?;
+        Ok(json)
+    }
 }
+
