@@ -9,6 +9,14 @@ edition = "2021"
 name = "production_scheduler_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# デフォルトは管理者モード
+default = ["admin-mode"]
+# 管理者モード（全機能）
+admin-mode = []
+# 作業者モード（閲覧のみ）
+worker-mode = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

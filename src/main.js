@@ -15,12 +15,14 @@ const productWeights = {
 // アプリケーション状態
 let schedules = [];
 let currentDate = new Date();
+let appMode = "admin"; // "admin" or "worker"
 
 // DOM要素
 const elements = {};
 
 // 初期化
 document.addEventListener("DOMContentLoaded", async () => {
+    await initAppMode();
     createTooltipElement();
     initElements();
     initEventListeners();
@@ -30,6 +32,56 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus("準備完了");
 });
 
+// アプリモードを取得して適用
+async function initAppMode() {
+    try {
+        const response = await invoke("get_app_mode");
+        if (response.success && response.data) {
+            appMode = response.data;
+            console.log("App mode:", appMode);
+            applyAppMode();
+        }
+    } catch (error) {
+        console.error("Failed to get app mode:", error);
+        appMode = "admin"; // fallback
+    }
+}
+
+// モードに応じてUIを切り替え
+function applyAppMode() {
+    const isWorker = appMode === "worker";
+    
+    // 作業者モードで非表示にする要素
+    const adminOnlyElements = [
+        "btn-test-data",
+        "btn-sync-to-kintone",
+        "btn-settings"
+    ];
+    
+    // タブを制御（新規追加タブは作業者モードで非表示）
+    const addTab = document.querySelector('.tab[data-tab="add"]');
+    if (addTab && isWorker) {
+        addTab.style.display = "none";
+    }
+    
+    // ヘッダーボタンを制御
+    adminOnlyElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && isWorker) {
+            el.style.display = "none";
+        }
+    });
+    
+    // ヘッダータイトルを更新
+    const headerTitle = document.querySelector("header h1");
+    if (headerTitle) {
+        if (isWorker) {
+            headerTitle.textContent = "🏭 生産計画スケジューラー【作業者】";
+        } else {
+            headerTitle.textContent = "🏭 生産計画スケジューラー【管理者】";
+        }
+    }
+}
 // カスタムツールチップ要素を作成
 function createTooltipElement() {
     const tooltip = document.createElement("div");
@@ -476,18 +528,20 @@ function renderScheduleTable() {
             <td>${schedule.notes || "-"}</td>
             <td><span class="status-badge">${schedule.production_status}</span></td>
             <td><span class="status-badge ${schedule.sync_status}">${getSyncStatusText(schedule.sync_status)}</span></td>
-            <td>
-                <button class="btn btn-small btn-primary btn-edit" data-id="${schedule.id}">編集</button>
-                <button class="btn btn-small btn-danger btn-delete" data-id="${schedule.id}">削除</button>
+            <td class="action-buttons">
+                ${appMode === "admin" ? `
+                    <button class="btn btn-small btn-primary btn-edit" data-id="${schedule.id}">編集</button>
+                    <button class="btn btn-small btn-danger btn-delete" data-id="${schedule.id}">削除</button>
+                ` : "-"}
             </td>
         `;
         tbody.appendChild(tr);
         
-        // 編集ボタンのイベント
-        tr.querySelector(".btn-edit").addEventListener("click", () => openEditModal(schedule));
-        
-        // 削除ボタンのイベント
-        tr.querySelector(".btn-delete").addEventListener("click", () => handleDeleteSchedule(schedule.id, schedule.product_name));
+        // 管理者モードのみ編集・削除イベントを設定
+        if (appMode === "admin") {
+            tr.querySelector(".btn-edit").addEventListener("click", () => openEditModal(schedule));
+            tr.querySelector(".btn-delete").addEventListener("click", () => handleDeleteSchedule(schedule.id, schedule.product_name));
+        }
     });
 }
 
@@ -958,6 +1012,10 @@ function setStatus(message, isError = false) {
     elements.statusMessage.textContent = message;
     elements.statusMessage.style.color = isError ? "#ff6b6b" : "#ccc";
 }
+
+
+
+
 
 
 

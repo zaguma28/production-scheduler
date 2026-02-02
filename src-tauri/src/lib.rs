@@ -43,6 +43,16 @@ pub fn run() {
         kintone_client: Mutex::new(Some(kintone_client)),
     };
 
+    // ウィンドウタイトルをモードに応じて設定
+    #[cfg(feature = "admin-mode")]
+    let app_title = "生産計画スケジューラー【管理者】";
+    #[cfg(feature = "worker-mode")]
+    let app_title = "生産計画スケジューラー【作業者】";
+    #[cfg(not(any(feature = "admin-mode", feature = "worker-mode")))]
+    let app_title = "生産計画スケジューラー【管理者】";
+
+    eprintln!("=== Starting app: {} ===", app_title);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(state)
@@ -55,8 +65,8 @@ pub fn run() {
             commands::sync_to_kintone,
             commands::get_product_weight,
             commands::delete_schedule,
+            commands::get_app_mode,
         ])
         .run(tauri::generate_context!())
         .expect("アプリケーションの実行中にエラーが発生しました");
 }
-

@@ -459,3 +459,22 @@ pub fn get_product_weight(product_name: String, state: State<AppState>) -> ApiRe
     }
 }
 
+
+/// アプリモードを取得
+#[tauri::command]
+pub fn get_app_mode() -> ApiResponse<String> {
+    #[cfg(feature = "admin-mode")]
+    let mode = "admin".to_string();
+    
+    #[cfg(feature = "worker-mode")]
+    let mode = "worker".to_string();
+    
+    #[cfg(not(any(feature = "admin-mode", feature = "worker-mode")))]
+    let mode = "admin".to_string();
+    
+    ApiResponse {
+        success: true,
+        data: Some(mode),
+        error: None,
+    }
+}
