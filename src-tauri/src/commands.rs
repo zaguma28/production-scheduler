@@ -97,6 +97,11 @@ pub async fn add_schedule(request: AddScheduleRequest, state: State<'_, AppState
 /// 方法B: kintone即時同期版
 #[cfg(feature = "kintone-immediate-sync")]
 async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
+    // MEMOの場合はkintone同期せずローカルのみ保存
+    if request.product_name == "MEMO" || request.product_name == "SHAPE" {
+        return add_memo_local_only(request, state);
+    }
+
     // kintoneクライアントを取得
     let client_opt = {
         let kintone = state.kintone_client.lock().unwrap();
@@ -194,6 +199,64 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
         },
         Err(e) => {
             eprintln!("=== Local DB error: {} ===", e);
+            Ok(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e.to_string()),
+            })
+        },
+    }
+}
+
+/// MEMO専用: kintone同期せずローカルのみ保存
+#[cfg(feature = "kintone-immediate-sync")]
+fn add_memo_local_only(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let schedule = LocalSchedule {
+        id: None,
+        kintone_record_id: None,
+        schedule_number: None,
+        product_name: request.product_name,
+        line: request.line,
+        start_datetime: request.start_datetime,
+        end_datetime: request.end_datetime,
+        quantity1: request.quantity1,
+        quantity2: request.quantity2,
+        quantity3: request.quantity3,
+        quantity4: request.quantity4,
+        quantity5: request.quantity5,
+        quantity6: request.quantity6,
+        quantity7: request.quantity7,
+        quantity8: request.quantity8,
+        total_quantity: request.total_quantity,
+        efficiency1: None,
+        efficiency2: None,
+        efficiency3: None,
+        efficiency4: None,
+        efficiency5: None,
+        efficiency6: None,
+        efficiency7: None,
+        efficiency8: None,
+        production_status: request.production_status.unwrap_or("未生産".to_string()),
+        notes: request.notes,
+        sync_status: "local_only".to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let db = state.db.lock().unwrap();
+    eprintln!("=== Saving MEMO to local DB only ===");
+    match db.add_schedule(&schedule) {
+        Ok(id) => {
+            eprintln!("=== MEMO saved: id={} ===", id);
+            Ok(ApiResponse {
+                success: true,
+                data: Some(id),
+                error: None,
+            })
+        },
+        Err(e) => {
+            eprintln!("=== MEMO save error: {} ===", e);
             Ok(ApiResponse {
                 success: false,
                 data: None,

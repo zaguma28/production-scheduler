@@ -731,3 +731,62 @@ body {
 .btn-edit {
     /* inherit primary or secondary styles based on usage in JS classes */
 } 
+
+/* Memo/メモ styles - Excel図形風（枠なし・半透明・重なり可） */
+.gantt-row .gantt-row-content .gantt-bar.is-memo,
+.gantt-bar.is-memo {
+    z-index: 500 !important;
+    position: absolute !important;
+    pointer-events: auto !important;
+    background: rgba(255, 243, 128, 0.85) !important;
+    border: none !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    color: #333 !important;
+    align-items: flex-start !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    backdrop-filter: none !important;
+}
+.gantt-bar.is-memo:hover {
+    background: rgba(255, 243, 128, 0.95) !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+.gantt-bar.is-memo .bar-product {
+    color: #222 !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-shadow: none !important;
+}
+.gantt-bar.is-memo .bar-status,
+.gantt-bar.is-memo .bar-quantity {
+    display: none !important;
+}
+
+/* Shape/図形 styles - Excel図形風（枠なし・半透明・重なり可） */
+.gantt-row .gantt-row-content .gantt-bar.is-shape,
+.gantt-bar.is-shape {
+    z-index: 500 !important;
+    position: absolute !important;
+    pointer-events: auto !important;
+    border: none !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+}
+.gantt-bar.is-shape:hover {
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+.gantt-bar.is-shape .bar-status,
+.gantt-bar.is-shape .bar-quantity,
+.gantt-bar.is-shape .bar-notes {
+    display: none !important;
+}
+

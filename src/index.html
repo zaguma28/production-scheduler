@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>生産計画スケジューラー</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="chart.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -109,6 +109,7 @@
                                 <option value="FS021PF">FS021PF (20kg)</option>
                                 <option value="FS021PS">FS021PS (20kg)</option>
                                 <option value="小袋">小袋 (20kg)</option>
+                                <option value="MEMO">📝 メモ・コメント</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -205,9 +206,111 @@
             <span id="status-message">準備完了</span>
             <span id="sync-status">同期: 未接続</span>
         </footer>
+
+        <!-- メモ追加モーダル -->
+        <div id="memo-modal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h2>📝 メモを追加</h2>
+                    <button class="modal-close" id="memo-modal-close">&times;</button>
+                </div>
+                <form id="memo-form" class="form">
+                    <div class="form-group">
+                        <label for="memo-datetime">日時</label>
+                        <input type="datetime-local" id="memo-datetime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="memo-duration">表示時間（時間）</label>
+                        <select id="memo-duration">
+                            <option value="1">1時間</option>
+                            <option value="2" selected>2時間</option>
+                            <option value="4">4時間</option>
+                            <option value="8">8時間</option>
+                            <option value="12">12時間</option>
+                            <option value="24">24時間</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="memo-text">メモ内容</label>
+                        <textarea id="memo-text" rows="4" placeholder="コメントを入力..." required style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--system-gray4);font-size:15px;resize:vertical;"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">✅ 追加</button>
+                        <button type="button" id="memo-modal-cancel" class="btn btn-secondary">キャンセル</button>
+                    </div>
+                </form>
+            </div>
+                </div>
+
+        <!-- 図形追加モーダル -->
+        <div id="shape-modal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h2>🔷 図形を追加</h2>
+                    <button class="modal-close" id="shape-modal-close">&times;</button>
+                </div>
+                <form id="shape-form" class="form">
+                    <div class="form-group">
+                        <label for="shape-datetime">日時</label>
+                        <input type="datetime-local" id="shape-datetime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="shape-duration">表示時間（時間）</label>
+                        <select id="shape-duration">
+                            <option value="1">1時間</option>
+                            <option value="2" selected>2時間</option>
+                            <option value="4">4時間</option>
+                            <option value="8">8時間</option>
+                            <option value="12">12時間</option>
+                            <option value="24">24時間</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="shape-type">図形の種類</label>
+                        <select id="shape-type">
+                            <option value="arrow-right">➡️ 右矢印</option>
+                            <option value="arrow-down">⬇️ 下矢印</option>
+                            <option value="star">⭐ 星</option>
+                            <option value="warning">⚠️ 警告</option>
+                            <option value="check">✅ チェック</option>
+                            <option value="important">❗ 重要</option>
+                            <option value="circle">🔴 丸印</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="shape-color">色</label>
+                        <select id="shape-color">
+                            <option value="red">🔴 赤</option>
+                            <option value="blue" selected>🔵 青</option>
+                            <option value="green">🟢 緑</option>
+                            <option value="yellow">🟡 黄</option>
+                            <option value="purple">🟣 紫</option>
+                            <option value="orange">🟠 オレンジ</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="shape-text">ラベル（任意）</label>
+                        <input type="text" id="shape-text" placeholder="図形にテキストを追加...">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">✅ 追加</button>
+                        <button type="button" id="shape-modal-cancel" class="btn btn-secondary">キャンセル</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    <!-- 右クリックコンテキストメニュー -->
+    <div id="context-menu" style="display:none;position:fixed;background:rgba(255,255,255,0.98);backdrop-filter:blur(20px);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.25);padding:8px 0;min-width:180px;z-index:9999;border:1px solid rgba(0,0,0,0.1);">
+        <div class="context-menu-item" data-action="add-memo" style="padding:12px 20px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:10px;">
+            📝 メモを追加
+        </div>
+        <div class="context-menu-item" data-action="add-shape" style="padding:12px 20px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:10px;">
+            🔷 図形を追加
+        </div>
+    </div>
     </div>
 
-    <script type="module" src="main.js"></script>
+    <script src="app.js?v=20260203203325"></script>
 </body>
 </html>
 
