@@ -276,8 +276,9 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
 
         const ghost = element.cloneNode(true);
         ghost.classList.add('gantt-ghost');
-        ghost.style.opacity = '0.6';
-        ghost.style.border = '2px dashed #333';
+        ghost.style.opacity = '0.8';
+        ghost.style.border = 'none';
+        ghost.style.boxShadow = '0 15px 40px rgba(0,0,0,0.2)';
         ghost.style.zIndex = '1000';
         ghost.style.pointerEvents = 'none';
         ghost.style.position = 'fixed';
@@ -292,9 +293,9 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
         preview.style.position = 'absolute';
         preview.style.height = '110px';
         preview.style.width = element.offsetWidth + 'px';
-        preview.style.borderRadius = '8px';
-        preview.style.border = '3px solid #007bff';
-        preview.style.backgroundColor = 'rgba(0, 123, 255, 0.2)';
+        preview.style.borderRadius = '14px';
+        preview.style.border = '2px dashed #007AFF';
+        preview.style.backgroundColor = 'rgba(0, 122, 255, 0.1)';
         preview.style.pointerEvents = 'none';
         preview.style.zIndex = '100';
         preview.style.display = 'none';
@@ -304,10 +305,10 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
         timeLabel.style.position = 'absolute';
         timeLabel.style.top = '-35px';
         timeLabel.style.left = '0';
-        timeLabel.style.backgroundColor = '#007bff';
+        timeLabel.style.backgroundColor = '#007AFF';
         timeLabel.style.color = 'white';
-        timeLabel.style.padding = '4px 10px';
-        timeLabel.style.borderRadius = '6px';
+        timeLabel.style.padding = '6px 16px';
+        timeLabel.style.borderRadius = '20px';
         timeLabel.style.fontSize = '13px';
         timeLabel.style.fontWeight = 'bold';
         timeLabel.style.whiteSpace = 'nowrap';
@@ -332,7 +333,7 @@ function handleGlobalMouseMove(e) {
         const rect = row.getBoundingClientRect();
         if (dropY >= rect.top && dropY <= rect.bottom) {
             targetRow = row;
-            row.style.backgroundColor = 'rgba(0, 123, 255, 0.08)';
+            row.style.backgroundColor = 'rgba(0, 122, 255, 0.05)';
         } else {
             row.style.backgroundColor = '';
         }
@@ -1042,7 +1043,7 @@ function getSyncStatusText(status) {
 
 function setStatus(message, isError = false) {
     elements.statusMessage.textContent = message;
-    elements.statusMessage.style.color = isError ? "#ff6b6b" : "#ccc";
+    elements.statusMessage.style.color = isError ? "#FF3B30" : "#8E8E93";
 }
 
 
