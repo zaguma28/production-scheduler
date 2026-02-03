@@ -114,7 +114,14 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
         }
     };
 
-    // kintoneにレコードを追加
+    // スケジュール番号を生成
+    let schedule_number = {
+        let db = state.db.lock().unwrap();
+        db.generate_schedule_number().unwrap_or_else(|_| "000000_000".to_string())
+    };
+    eprintln!("=== Generated schedule number: {} ===", schedule_number);
+
+    // kintoneにレコードを追加（スケジュール番号含む）
     let record = serde_json::json!({
         "product_name": { "value": request.product_name },
         "line": { "value": request.line },
@@ -123,6 +130,7 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
         "quantity": { "value": request.quantity1.map(|v| v.to_string()) },
         "total_quantity": { "value": request.total_quantity.map(|v| v.to_string()) },
         "status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
+        "schedule_number": { "value": schedule_number.clone() },
     });
 
     let kintone_id = match client.add_record(record).await {
@@ -139,29 +147,12 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
 
     eprintln!("=== kintone record created: id={} ===", kintone_id);
 
-    // 作成したレコードを取得してスケジュール番号を取得
-    let schedule_number = match client.get_record(kintone_id).await {
-        Ok(json) => {
-            let record = &json["record"];
-            let sn = record.get("スケジュール番号")
-                .and_then(|f| f.get("value"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            eprintln!("=== Schedule number: {:?} ===", sn);
-            sn
-        }
-        Err(e) => {
-            eprintln!("get_record error: {}", e);
-            None
-        }
-    };
-
     // ローカルDBに保存
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let schedule = LocalSchedule {
         id: None,
         kintone_record_id: Some(kintone_id),
-        schedule_number,
+        schedule_number: Some(schedule_number),
         product_name: request.product_name,
         line: request.line,
         start_datetime: request.start_datetime,
@@ -191,17 +182,24 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
     };
 
     let db = state.db.lock().unwrap();
+    eprintln!("=== Saving to local DB: {} ===", schedule.product_name);
     match db.add_schedule(&schedule) {
-        Ok(id) => Ok(ApiResponse {
-            success: true,
-            data: Some(id),
-            error: None,
-        }),
-        Err(e) => Ok(ApiResponse {
-            success: false,
-            data: None,
-            error: Some(e.to_string()),
-        }),
+        Ok(id) => {
+            eprintln!("=== Local DB saved: id={} ===", id);
+            Ok(ApiResponse {
+                success: true,
+                data: Some(id),
+                error: None,
+            })
+        },
+        Err(e) => {
+            eprintln!("=== Local DB error: {} ===", e);
+            Ok(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e.to_string()),
+            })
+        },
     }
 }
 
@@ -242,17 +240,24 @@ fn add_schedule_local_only(request: AddScheduleRequest, state: State<'_, AppStat
     };
 
     let db = state.db.lock().unwrap();
+    eprintln!("=== Saving to local DB: {} ===", schedule.product_name);
     match db.add_schedule(&schedule) {
-        Ok(id) => Ok(ApiResponse {
-            success: true,
-            data: Some(id),
-            error: None,
-        }),
-        Err(e) => Ok(ApiResponse {
-            success: false,
-            data: None,
-            error: Some(e.to_string()),
-        }),
+        Ok(id) => {
+            eprintln!("=== Local DB saved: id={} ===", id);
+            Ok(ApiResponse {
+                success: true,
+                data: Some(id),
+                error: None,
+            })
+        },
+        Err(e) => {
+            eprintln!("=== Local DB error: {} ===", e);
+            Ok(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e.to_string()),
+            })
+        },
     }
 }
 
@@ -367,7 +372,7 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     let kintone_id: u32 = get_string_value(&record, "$id").parse().unwrap_or(0);
 
                     // スケジュール番号フィールドを取得
-                    let schedule_number = get_optional_string_value(&record, "スケジュール番号");
+                    let schedule_number = get_optional_string_value(&record, "schedule_number");
 
                     // 製品名を取得（SINGLE_LINE_TEXT）
                     let product_name = get_string_value(&record, "product_name");
@@ -534,19 +539,41 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
 
 /// スケジュールを削除
 #[tauri::command]
-pub fn delete_schedule(id: i64, state: State<AppState>) -> ApiResponse<()> {
+pub async fn delete_schedule(id: i64, state: State<'_, AppState>) -> Result<ApiResponse<()>, ()> {
+    // まずkintone_record_idを取得
+    let kintone_record_id = {
+        let db = state.db.lock().unwrap();
+        db.get_kintone_record_id(id).unwrap_or(None)
+    };
+
+    // kintoneからも削除（kintone-immediate-sync feature有効時）
+    #[cfg(feature = "kintone-immediate-sync")]
+    if let Some(kintone_id) = kintone_record_id {
+        let client_opt = {
+            let kintone = state.kintone_client.lock().unwrap();
+            kintone.clone()
+        };
+
+        if let Some(client) = client_opt {
+            if let Err(e) = client.delete_record(kintone_id).await {
+                eprintln!("kintone delete error: {}", e);
+            }
+        }
+    }
+
+    // ローカルDBから削除
     let db = state.db.lock().unwrap();
     match db.delete_schedule(id) {
-        Ok(_) => ApiResponse {
+        Ok(_) => Ok(ApiResponse {
             success: true,
             data: Some(()),
             error: None,
-        },
-        Err(e) => ApiResponse {
+        }),
+        Err(e) => Ok(ApiResponse {
             success: false,
             data: None,
             error: Some(e.to_string()),
-        },
+        }),
     }
 }
 

@@ -112,14 +112,14 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="start-datetime">開始日時</label>
-                            <input type="datetime-local" id="start-datetime" required>
+                            <label for="quantity1">個数</label>
+                            <input type="number" id="quantity1" min="0" placeholder="生産個数を入力">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="end-datetime">終了日時（自動計算）</label>
-                            <input type="datetime-local" id="end-datetime" readonly>
+                            <label for="start-datetime">開始日時</label>
+                            <input type="datetime-local" id="start-datetime" required>
                         </div>
                         <div class="form-group">
                             <label for="efficiency">製綿能率 (t/h)</label>
@@ -141,8 +141,8 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="quantity1">個数</label>
-                            <input type="number" id="quantity1" min="0" placeholder="生産個数を入力">
+                            <label for="end-datetime">終了日時（自動計算）</label>
+                            <input type="datetime-local" id="end-datetime" readonly>
                         </div>
                         <div class="form-group">
                             <label for="notes">備考</label>

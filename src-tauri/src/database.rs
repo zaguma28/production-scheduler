@@ -218,7 +218,7 @@ impl Database {
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
                     total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
                     production_status, notes, sync_status, created_at, updated_at
-             FROM schedules ORDER BY start_datetime"
+             FROM schedules ORDER BY start_datetime DESC"
         )?;
 
         let schedules = stmt.query_map([], |row| {
@@ -315,6 +315,19 @@ impl Database {
     }
 
     /// スケジュールを削除
+    /// IDでスケジュールのkintone_record_idを取得
+    pub fn get_kintone_record_id(&self, id: i64) -> Result<Option<u32>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT kintone_record_id FROM schedules WHERE id = ?1"
+        )?;
+        
+        let result: Option<Option<u32>> = stmt.query_row(params![id], |row| {
+            Ok(row.get::<_, Option<u32>>(0)?)
+        }).ok();
+        
+        Ok(result.flatten())
+    }
+
     pub fn delete_schedule(&self, id: i64) -> Result<()> {
         self.conn.execute(
             "DELETE FROM schedules WHERE id = ?1",

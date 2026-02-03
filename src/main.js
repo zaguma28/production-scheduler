@@ -471,9 +471,12 @@ function updateGanttDate() {
 
 async function loadSchedules() {
     try {
+        console.log("=== loadSchedules called ===");
         const response = await invoke("get_schedules");
+        console.log("=== get_schedules response:", response);
         if (response.success) {
             schedules = response.data || [];
+            console.log("=== Loaded schedules count:", schedules.length);
             renderScheduleTable();
         } else {
             console.error("スケジュール取得エラー:", response.error);

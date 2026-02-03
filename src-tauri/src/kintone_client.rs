@@ -179,10 +179,42 @@ impl KintoneClient {
                 ("id", record_id.to_string()),
             ])
             .send()
+            .await?;    let json: serde_json::Value = response.json().await?;
+        Ok(json)
+    }
+
+    /// レコードを削除
+    pub async fn delete_record(&self, record_id: u32) -> Result<()> {
+        let url = format!("{}/records.json", self.base_url());
+
+        let body = serde_json::json!({
+            "app": self.config.app_id,
+            "ids": [record_id]
+        });
+
+        eprintln!("=== kintone delete_record request ===");
+        eprintln!("URL: {}", url);
+        eprintln!("Body: {}", serde_json::to_string_pretty(&body).unwrap());
+
+        let response = self.client
+            .delete(&url)
+            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
             .await?;
 
-        let json: serde_json::Value = response.json().await?;
-        Ok(json)
+        let status = response.status();
+        let text = response.text().await?;
+        eprintln!("=== kintone delete_record response ===");
+        eprintln!("Status: {}", status);
+        eprintln!("Body: {}", text);
+
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Delete failed: {}", text))
+        }
     }
 }
 
