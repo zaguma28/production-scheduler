@@ -140,8 +140,36 @@ impl Database {
         Ok(())
     }
 
-    /// スケジュールを追加
+    /// 採番を生成（MMDDYY_XXX形式、日毎リセット）
+    pub fn generate_schedule_number(&self) -> Result<String> {
+        use chrono::Local;
+        
+        let now = Local::now();
+        let date_prefix = now.format("%m%d%y").to_string();  // MMDDYY形式
+        
+        // 今日の日付プレフィックスで始まるスケジュール番号をカウント
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*) FROM schedules WHERE schedule_number LIKE ?1"
+        )?;
+        let pattern = format!("{}_%%", date_prefix);
+        let count: i32 = stmt.query_row([pattern], |row| row.get(0))?;
+        
+        // 連番は001から開始（3桁、ゼロ埋め）
+        let seq = count + 1;
+        let schedule_number = format!("{}_{:03}", date_prefix, seq);
+        
+        Ok(schedule_number)
+    }
+
+    /// スケジュールを追加（自動採番）
     pub fn add_schedule(&self, schedule: &LocalSchedule) -> Result<i64> {
+        // 採番を生成
+        let schedule_number = if schedule.schedule_number.is_none() {
+            Some(self.generate_schedule_number()?)
+        } else {
+            schedule.schedule_number.clone()
+        };
+        
         self.conn.execute(
             "INSERT INTO schedules (
                 kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
@@ -151,7 +179,7 @@ impl Database {
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 schedule.kintone_record_id,
-                schedule.schedule_number,
+                schedule_number,
                 schedule.product_name,
                 schedule.line,
                 schedule.start_datetime,
