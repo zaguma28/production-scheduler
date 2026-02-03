@@ -23,6 +23,7 @@ const elements = {};
 // 初期化
 document.addEventListener("DOMContentLoaded", async () => {
     await initAppMode();
+    await initKintoneConfig();
     createTooltipElement();
     initElements();
     initEventListeners();
@@ -44,6 +45,34 @@ async function initAppMode() {
     } catch (error) {
         console.error("Failed to get app mode:", error);
         appMode = "admin"; // fallback
+    }
+}
+
+// kintone設定を初期化（デフォルト値を設定）
+async function initKintoneConfig() {
+    const defaultConfig = {
+        subdomain: "jfe-rockfiber",
+        app_id: 506,
+        api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo"
+    };
+    
+    // フォームに初期値を設定
+    const subdomainEl = document.getElementById("subdomain");
+    const appIdEl = document.getElementById("app-id");
+    const apiTokenEl = document.getElementById("api-token");
+    
+    if (subdomainEl) subdomainEl.value = defaultConfig.subdomain;
+    if (appIdEl) appIdEl.value = defaultConfig.app_id;
+    if (apiTokenEl) apiTokenEl.value = defaultConfig.api_token;
+    
+    // 自動的にkintone設定を保存
+    try {
+        const response = await invoke("save_kintone_config", { config: defaultConfig });
+        if (response.success) {
+            console.log("kintone設定を初期化しました");
+        }
+    } catch (error) {
+        console.error("kintone設定の初期化に失敗:", error);
     }
 }
 
@@ -473,7 +502,7 @@ async function handleAddSchedule(e) {
         quantity7: null,
         quantity8: null,
         total_quantity: quantity,
-        production_status: "予定",
+        production_status: "未生産",
         notes: document.getElementById("notes").value || null
     };
 
@@ -558,7 +587,7 @@ function openEditModal(schedule) {
     document.getElementById("edit-end-datetime").value = formatDateTimeForInput(schedule.end_datetime);
     document.getElementById("edit-quantity").value = schedule.total_quantity || schedule.quantity1 || "";
     document.getElementById("edit-notes").value = schedule.notes || "";
-    document.getElementById("edit-status").value = schedule.production_status || "予定";
+    document.getElementById("edit-status").value = schedule.production_status || "未生産";
     
     document.getElementById("edit-modal").classList.add("active");
 }
@@ -607,7 +636,7 @@ function createEditModal() {
                     <div class="form-group">
                         <label for="edit-status">生産状況</label>
                         <select id="edit-status">
-                            <option value="予定">未生産</option>
+                            <option value="未生産">未生産</option>
                             <option value="生産中">生産中</option>
                             <option value="生産終了">生産終了</option>
                         </select>
@@ -973,7 +1002,7 @@ async function handleGenerateTestData() {
             end_datetime: fmt(endDate),
             quantity1: quantity,
             total_quantity: quantity,
-            production_status: "予定",
+            production_status: "未生産",
             notes: `テスト${i + 1}`
         });
     }
