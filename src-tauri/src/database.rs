@@ -99,6 +99,7 @@ impl Database {
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency6 TEXT", []);
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency7 TEXT", []);
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency8 TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN notes TEXT", []);
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS kintone_config (
@@ -351,6 +352,15 @@ impl Database {
         self.conn.execute(
             "UPDATE schedules SET start_datetime = ?1, end_datetime = ?2, sync_status = 'modified', updated_at = datetime('now') WHERE id = ?3",
             params![start, end, id],
+        )?;
+        Ok(())
+    }
+
+    /// スケジュールのnotesを更新
+    pub fn update_schedule_notes(&self, id: i64, notes: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE schedules SET notes = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![notes, id],
         )?;
         Ok(())
     }

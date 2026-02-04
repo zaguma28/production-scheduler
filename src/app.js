@@ -1,4 +1,4 @@
-﻿console.log('Main.js loaded v=RFACTORD');
+console.log('Main.js loaded v=RFACTORD');
 
 // 生産計画スケジューラー - メインJavaScript
 
@@ -26,7 +26,22 @@ const productWeights = {
 
 };
 
+// 日時フォーマット関数（早期定義）
+function formatDateTime(dateStr) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
+}
 
+// 同期ステータステキスト関数（早期定義）
+function getSyncStatusText(status) {
+    const map = {
+        "pending": "未同期",
+        "synced": "同期済み",
+        "modified": "変更あり"
+    };
+    return map[status] || status;
+}
 
 // アプリケーション状慁
 
@@ -80,19 +95,16 @@ function initMemoModal() {
 
         e.preventDefault();
 
-        const datetime = document.getElementById("memo-datetime").value;
-
-        const duration = parseInt(document.getElementById("memo-duration").value);
+        // 現在時刻を使用（日時選択はなし）
+        const startDate = new Date();
+        const duration = 2; // デフォルト2時間
 
         const text = document.getElementById("memo-text").value;
 
 
 
-        if (!datetime || !text) return;
+        if (!text) return;
 
-
-
-        const startDate = new Date(datetime);
 
         const endDate = new Date(startDate.getTime() + duration * 60 * 60 * 1000);
 
@@ -182,7 +194,7 @@ function initMemoModal() {
 
     // コンテ��ストメニューのホバー効果
 
-    document.querySelectorAll(".context-menu-item").forach(item => {
+    document.querySelectorAll(".context-menu-item").forEach(item => {
 
         item.addEventListener("mouseenter", () => item.style.backgroundColor = "rgba(0,122,255,0.1)");
 
@@ -196,14 +208,6 @@ function initMemoModal() {
 
     document.querySelector('[data-action="add-memo"]')?.addEventListener("click", () => {
 
-        if (!contextClickedTime) return;
-
-        const pad = (n) => n.toString().padStart(2, '0');
-
-        const dtValue = `${contextClickedTime.getFullYear()}-${pad(contextClickedTime.getMonth()+1)}-${pad(contextClickedTime.getDate())}T${pad(contextClickedTime.getHours())}:${pad(contextClickedTime.getMinutes())}`;
-
-        document.getElementById("memo-datetime").value = dtValue;
-
         document.getElementById("memo-text").value = "";
 
         memoModal.classList.add("active");
@@ -213,14 +217,6 @@ function initMemoModal() {
     
 
     document.querySelector('[data-action="add-shape"]')?.addEventListener("click", () => {
-
-        if (!contextClickedTime) return;
-
-        const pad = (n) => n.toString().padStart(2, '0');
-
-        const dtValue = `${contextClickedTime.getFullYear()}-${pad(contextClickedTime.getMonth()+1)}-${pad(contextClickedTime.getDate())}T${pad(contextClickedTime.getHours())}:${pad(contextClickedTime.getMinutes())}`;
-
-        document.getElementById("shape-datetime").value = dtValue;
 
         document.getElementById("shape-text").value = "";
 
@@ -318,23 +314,16 @@ function initShapeModal() {
 
         e.preventDefault();
 
-        const datetime = document.getElementById("shape-datetime").value;
-
-        const duration = parseInt(document.getElementById("shape-duration").value);
+        // 現在時刻を使用（日時選択はなし）
+        const startDate = new Date();
+        const duration = 2; // デフォルト2時間
 
         const shapeType = document.getElementById("shape-type").value;
 
-        const shapeColor = document.getElementById("shape-color").value;
+        const shapeColor = 'transparent'; // 背景透明
 
         const shapeText = document.getElementById("shape-text").value;
 
-
-
-        if (!datetime) return;
-
-
-
-        const startDate = new Date(datetime);
 
         const endDate = new Date(startDate.getTime() + duration * 60 * 60 * 1000);
 
@@ -546,7 +535,7 @@ function applyAppMode() {
 
     // 作業老��ードで非表示にする要素
 
-    const adminOnlylements = [
+    const adminOnlyElements = [
 
         "btn-test-data",
 
@@ -572,7 +561,7 @@ function applyAppMode() {
 
     // ヘッダーボタンを制御
 
-    adminOnlylements.forach(id => {
+    adminOnlyElements.forEach(id => {
 
         const el = document.getElementById(id);
 
@@ -610,7 +599,7 @@ function applyAppMode() {
 
 function createTooltiplement() {
 
-    const tooltip = document.createlement("div");
+    const tooltip = document.createElement("div");
 
     tooltip.className = "custom-tooltip";
 
@@ -996,7 +985,7 @@ async function handleGenerateTestData() {
 
 function initventListeners() {
 
-    elements.tabs.forach(tab => {
+    elements.tabs.forEach(tab => {
 
         tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 
@@ -1202,7 +1191,7 @@ function startDrag(e) {
 
 
 
-    const preview = document.createlement('div');
+    const preview = document.createElement('div');
 
     preview.className = 'drop-preview';
 
@@ -1226,7 +1215,7 @@ function startDrag(e) {
 
 
 
-    const timeLabel = document.createlement('div');
+    const timeLabel = document.createElement('div');
 
     timeLabel.className = 'preview-time-label';
 
@@ -1302,7 +1291,7 @@ function handleGlobalMouseMove(e) {
 
 
 
-    document.querySelectorAll('.gantt-row').forach(row => {
+    document.querySelectorAll('.gantt-row').forEach(row => {
 
         const rect = row.getBoundingClientRect();
 
@@ -1414,7 +1403,7 @@ async function handleGlobalMouseUp(e) {
 
 
 
-    document.querySelectorAll('.gantt-row').forach(r => r.style.backgroundColor = '');
+    document.querySelectorAll('.gantt-row').forEach(r => r.style.backgroundColor = '');
 
 
 
@@ -1430,7 +1419,7 @@ async function handleGlobalMouseUp(e) {
 
     let targetRow = null;
 
-    document.querySelectorAll('.gantt-row').forach(row => {
+    document.querySelectorAll('.gantt-row').forEach(row => {
 
         const rect = row.getBoundingClientRect();
 
@@ -1556,9 +1545,9 @@ function formatIsoString(date) {
 
 function switchTab(tabName) {
 
-    elements.tabs.forach(t => t.classList.remove("active"));
+    elements.tabs.forEach(t => t.classList.remove("active"));
 
-    elements.views.forach(v => v.classList.remove("active"));
+    elements.views.forEach(v => v.classList.remove("active"));
 
 
 
@@ -1838,9 +1827,9 @@ function renderScheduleTable() {
 
 
 
-    schedules.forach(schedule => {
+    schedules.forEach(schedule => {
 
-        const tr = document.createlement("tr");
+        const tr = document.createElement("tr");
 
         tr.dataset.id = schedule.id;
 
@@ -1958,7 +1947,7 @@ function formatDateTimeForInput(dateStr) {
 
 function createditModal() {
 
-    const modal = document.createlement("div");
+    const modal = document.createElement("div");
 
     modal.id = "edit-modal";
 
@@ -2259,7 +2248,7 @@ function renderGantt() {
 
 
 
-        const row = document.createlement("div");
+        const row = document.createElement("div");
 
         row.className = "gantt-row";
 
@@ -2267,7 +2256,7 @@ function renderGantt() {
 
 
 
-        const labelDiv = document.createlement("div");
+        const labelDiv = document.createElement("div");
 
         labelDiv.className = "gantt-row-label";
 
@@ -2277,7 +2266,7 @@ function renderGantt() {
 
 
 
-        const contentDiv = document.createlement("div");
+        const contentDiv = document.createElement("div");
 
         contentDiv.className = "gantt-row-content";
 
@@ -2321,9 +2310,9 @@ function renderGantt() {
 
 
 
-        lanes.forach((laneSchedules, laneIndex) => {
+        lanes.forEach((laneSchedules, laneIndex) => {
 
-            laneSchedules.forach(schedule => {
+            laneSchedules.forEach(schedule => {
 
                 const bar = createGanttBar(schedule, rowStart, laneIndex);
 
@@ -2355,7 +2344,7 @@ function renderOverlayItems(container, startDate) {
 
 
 
-    overlay = document.createlement('div');
+    overlay = document.createElement('div');
 
     overlay.className = 'gantt-overlay';
 
@@ -2371,69 +2360,142 @@ function renderOverlayItems(container, startDate) {
 
 
 
-    overlayItems.forach(item => {
+    overlayItems.forEach(item => {
 
         if (!item.start_datetime) return;
 
+        // ピクセル位置をnotesから取得（存在すれば）
+        let pixelPos = null;
+        let notesData = item.notes || '';
+        if (item.product_name === 'MMO') {
+            // MMOのnotesはテキストまたは{text, x, y, scale}形式
+            try {
+                const parsed = JSON.parse(notesData);
+                if (parsed.x !== undefined && parsed.y !== undefined) {
+                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                    notesData = parsed.text || '';
+                }
+            } catch(e) { /* テキスト形式 */ }
+        } else if (item.product_name === 'SHAP') {
+            // SHAPのnotesは{type, color, text, x, y, scale}形式
+            try {
+                const parsed = JSON.parse(notesData);
+                if (parsed.x !== undefined && parsed.y !== undefined) {
+                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                }
+            } catch(e) {}
+        }
 
+        let leftPx, topPx, widthPx, heightPx;
+        
+        if (pixelPos) {
+            // ピクセル位置とサイズが保存されていればそれを使用
+            leftPx = pixelPos.x;
+            topPx = pixelPos.y;
+            widthPx = pixelPos.w || 120;
+            heightPx = pixelPos.h || 80;
+        } else {
+            // 保存されていなければ日時から計算
+            const itemStart = new Date(item.start_datetime);
+            const itemDateStr = getProductionDateStr(itemStart);
+            const rowlement = container.querySelector('[data-date="' + itemDateStr + '"]');
+            if (!rowlement) return;
+            
+            const rowTop = rowlement.offsetTop;
+            const dayStart = new Date(itemStart);
+            dayStart.setHours(6, 0, 0, 0);
+            if (itemStart.getHours() < 6) dayStart.setDate(dayStart.getDate() - 1);
+            const msFrom6AM = itemStart.getTime() - dayStart.getTime();
+            leftPx = 100 + (msFrom6AM / (60 * 60 * 1000)) * 60;
+            topPx = rowTop + 10;
+            
+            // デフォルトサイズ
+            const itemStart2 = new Date(item.start_datetime);
+            const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart2.getTime() + 2*60*60*1000);
+            const durationMs = itemnd.getTime() - itemStart2.getTime();
+            widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60);
+            heightPx = 80;
+        }
 
         const itemStart = new Date(item.start_datetime);
-
         const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart.getTime() + 2*60*60*1000);
 
-        
+        const iteml = document.createElement('div');
 
-        const itemDateStr = getProductionDateStr(itemStart);
+        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + topPx + 'px;width:' + widthPx + 'px;height:' + heightPx + 'px;pointer-events:auto;cursor:move;padding:10px;display:flex;align-items:flex-start;justify-content:space-between;z-index:1001;background:transparent;border:none;border-radius:4px;overflow:visible;box-sizing:border-box;transform-origin:top left;';
 
-        const rowlement = container.querySelector('[data-date="' + itemDateStr + '"]');
-
-        if (!rowlement) return;
-
-
-
-        const rowTop = rowlement.offsetTop;
-
-
-
-        const dayStart = new Date(itemStart);
-
-        dayStart.setHours(6, 0, 0, 0);
-
-        if (itemStart.getHours() < 6) dayStart.setDate(dayStart.getDate() - 1);
-
-        const msFrom6AM = itemStart.getTime() - dayStart.getTime();
-
-        const leftPx = 100 + (msFrom6AM / (60 * 60 * 1000)) * 60;
-
-
-
-        const durationMs = itemnd.getTime() - itemStart.getTime();
-
-        const widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60);
-
-
-
-        const iteml = document.createlement('div');
-
-        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + (rowTop + 10) + 'px;width:' + widthPx + 'px;height:100px;pointer-events:auto;cursor:move;border-radius:8px;padding:10px;display:flex;align-items:flex-start;justify-content:space-between;z-index:1001;';
-
-
+        // 保存されたスケール値を適用
+        if (pixelPos && pixelPos.scale && pixelPos.scale !== 1.0) {
+            iteml.style.transform = `scale(${pixelPos.scale})`;
+        }
 
         if (item.product_name === 'MMO') {
 
-            iteml.style.background = 'rgba(255, 243, 128, 0.9)';
+            // 背景色はcssTextで設定済み（リサイズ確認用）
 
-            iteml.style.border = 'none';
+            // メモテキストをnotesDataから取得（JSON形式の場合はtextプロパティ）
+            let memoText = notesData;
+            if (!memoText) {
+                try {
+                    const parsed = JSON.parse(item.notes || '{}');
+                    memoText = parsed.text || '📝 メモ';
+                } catch(e) {
+                    memoText = item.notes || '📝 メモ';
+                }
+            }
 
-            iteml.style.boxShadow = '2px 2px 8px rgba(0,0,0,0.15)';
+            const textSpan = document.createElement('span');
 
-            const textSpan = document.createlement('span');
+            textSpan.style.cssText = 'color:#333;font-size:14px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;cursor:text;';
 
-            textSpan.style.cssText = 'color:#333;font-size:14px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;';
-
-            textSpan.textContent = item.notes || '📝 メモ';
+            textSpan.textContent = memoText;
 
             iteml.appendChild(textSpan);
+
+            // ダブルクリックで編集モード
+            textSpan.addEventListener('dblclick', function(e) {
+                e.stopPropagation();
+                const input = document.createElement('textarea');
+                input.value = textSpan.textContent;
+                input.style.cssText = 'width:100%;height:100%;border:1px solid #007AFF;border-radius:4px;padding:4px;font-size:14px;resize:none;outline:none;';
+                textSpan.style.display = 'none';
+                iteml.insertBefore(input, textSpan);
+                input.focus();
+                input.select();
+                
+                async function saveEdit() {
+                    const newText = input.value;
+                    textSpan.textContent = newText;
+                    textSpan.style.display = '';
+                    input.remove();
+                    
+                    // DBに保存
+                    const newX = parseInt(iteml.style.left) || 0;
+                    const newY = parseInt(iteml.style.top) || 0;
+                    const newW = parseInt(iteml.style.width) || 120;
+                    const newH = parseInt(iteml.style.height) || 80;
+                    const newNotes = JSON.stringify({ text: newText, x: newX, y: newY, w: newW, h: newH });
+                    
+                    try {
+                        await window.__TAURI__.core.invoke('update_schedule', {
+                            request: { id: item.id, notes: newNotes }
+                        });
+                        item.notes = newNotes;
+                    } catch (err) {
+                        console.error('メモ更新エラー:', err);
+                    }
+                }
+                
+                input.addEventListener('blur', saveEdit);
+                input.addEventListener('keydown', function(ke) {
+                    if (ke.key === 'Escape') {
+                        textSpan.style.display = '';
+                        input.remove();
+                    } else if (ke.key === 'Enter' && ke.ctrlKey) {
+                        saveEdit();
+                    }
+                });
+            });
 
         } else if (item.product_name === 'SHAP') {
 
@@ -2443,17 +2505,13 @@ function renderOverlayItems(container, startDate) {
 
             const colorMap = { red: 'rgba(255,59,48,0.6)', blue: 'rgba(0,122,255,0.6)', green: 'rgba(52,199,89,0.6)', yellow: 'rgba(255,204,0,0.7)', purple: 'rgba(175,82,222,0.6)', orange: 'rgba(255,149,0,0.6)' };
 
-            iteml.style.background = colorMap[shapeInfo.color] || colorMap.blue;
-
-            iteml.style.border = 'none';
-
-            iteml.style.boxShadow = '2px 2px 8px rgba(0,0,0,0.15)';
+            // 背景色はcssTextで設定済み（リサイズ確認用）
 
             const iconMap = { 'arrow-right': '➡', 'arrow-down': '⬇', 'star': '★', 'warning': '⚠️', 'check': '✅', 'important': '❗', 'circle': '🔴' };
 
             const icon = iconMap[shapeInfo.type] || '🔷';
 
-            const contentSpan = document.createlement('span');
+            const contentSpan = document.createElement('span');
 
             contentSpan.style.cssText = 'font-size:28px;display:flex;align-items:center;gap:8px;flex:1;';
 
@@ -2463,35 +2521,174 @@ function renderOverlayItems(container, startDate) {
 
         }
 
-
-
-        const deleteBtn = document.createlement('button');
-
-        deleteBtn.textContent = "×";
-
-        deleteBtn.style.cssText = 'background:rgba(255,59,48,0.9);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:16px;font-weight:bold;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-
-        deleteBtn.onclick = async (e) => {
-
-            e.stopPropagation();
-
+        // 右クリックで削除メニュー
+        iteml.addEventListener('contextmenu', async (e) => {
+            e.preventDefault();
             if (confirm('削除しますか？')) {
-
                 try {
-
                     await window.__TAURI__.core.invoke('delete_schedule', { id: item.id });
-
                     await loadSchedules();
-
                     renderGantt();
-
                 } catch (err) { alert('削除に失敗しました'); }
+            }
+        });
 
+        // リサイズハンドル（右下）
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+        resizeHandle.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;background:rgba(0,122,255,0.5);border-radius:0 0 4px 0;pointer-events:auto;z-index:10;';
+        resizeHandle.innerHTML = '⤡';
+        resizeHandle.style.fontSize = '12px';
+        resizeHandle.style.display = 'flex';
+        resizeHandle.style.alignItems = 'center';
+        resizeHandle.style.justifyContent = 'center';
+        resizeHandle.style.color = '#fff';
+        resizeHandle.style.fontWeight = 'bold';
+        iteml.appendChild(resizeHandle);
+
+        // リサイズ機能（transform: scaleで中身も拡大縮小）
+        resizeHandle.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const origWidth = parseInt(iteml.style.width) || 100;
+            const origHeight = parseInt(iteml.style.height) || 100;
+            
+            // 現在のscaleを取得（初期値1.0）
+            const currentTransform = iteml.style.transform || '';
+            const scaleMatch = currentTransform.match(/scale\(([\d.]+)\)/);
+            const origScale = scaleMatch ? parseFloat(scaleMatch[1]) : 1.0;
+            
+            // transformOriginを左上に設定
+            iteml.style.transformOrigin = 'top left';
+            
+            function onResizeMove(ev) {
+                // ドラッグ距離からスケール係数を計算
+                const deltaX = ev.clientX - startX;
+                const deltaY = ev.clientY - startY;
+                const delta = Math.max(deltaX, deltaY); // 大きい方を採用
+                const scaleChange = delta / 100; // 100pxドラッグで1.0倍変化
+                const newScale = Math.max(0.3, Math.min(3.0, origScale + scaleChange));
+                
+                iteml.style.transform = `scale(${newScale.toFixed(2)})`;
+            }
+            
+            async function onResizeEnd(ev) {
+                document.removeEventListener('mousemove', onResizeMove);
+                document.removeEventListener('mouseup', onResizeEnd);
+                
+                // スケール値を取得してnotesに保存
+                const transformStr = iteml.style.transform || '';
+                const scaleMatch2 = transformStr.match(/scale\(([\d.]+)\)/);
+                const finalScale = scaleMatch2 ? parseFloat(scaleMatch2[1]) : 1.0;
+                
+                const newX = parseInt(iteml.style.left) || 0;
+                const newY = parseInt(iteml.style.top) || 0;
+                
+                let newNotes;
+                if (item.product_name === 'MMO') {
+                    let text = '';
+                    try {
+                        const parsed = JSON.parse(item.notes || '{}');
+                        text = parsed.text || item.notes || '';
+                    } catch(e) { text = item.notes || ''; }
+                    newNotes = JSON.stringify({ text: text, x: newX, y: newY, scale: finalScale });
+                } else {
+                    let shapeData = { type: 'circle', color: 'blue', text: '' };
+                    try { shapeData = JSON.parse(item.notes || '{}'); } catch(e) {}
+                    shapeData.x = newX;
+                    shapeData.y = newY;
+                    shapeData.scale = finalScale;
+                    newNotes = JSON.stringify(shapeData);
+                }
+                
+                try {
+                    await window.__TAURI__.core.invoke('update_schedule', {
+                        request: { id: item.id, notes: newNotes }
+                    });
+                    item.notes = newNotes;
+                } catch (err) {
+                    console.error('サイズ更新エラー:', err);
+                }
+            }
+            
+            document.addEventListener('mousemove', onResizeMove);
+            document.addEventListener('mouseup', onResizeEnd);
+        });
+
+        // ドラッグ機能を追加
+        iteml.addEventListener('mousedown', function(e) {
+            if (resizeHandle.contains(e.target)) return; // リサイズハンドルは除外
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const origLeft = parseInt(iteml.style.left) || 0;
+            const origTop = parseInt(iteml.style.top) || 0;
+            const itemId = item.id;
+            const duration = itemnd.getTime() - itemStart.getTime();
+            
+            iteml.style.cursor = 'grabbing';
+            iteml.style.zIndex = '2000';
+            e.preventDefault();
+
+            function onMouseMove(ev) {
+                const deltaX = ev.clientX - startX;
+                const deltaY = ev.clientY - startY;
+                iteml.style.left = (origLeft + deltaX) + 'px';
+                iteml.style.top = (origTop + deltaY) + 'px';
             }
 
-        };
+            async function onMouseUp(ev) {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                iteml.style.cursor = 'move';
+                iteml.style.zIndex = '1001';
+                
+                // 新しいピクセル位置を取得
+                const newX = parseInt(iteml.style.left) || 0;
+                const newY = parseInt(iteml.style.top) || 0;
+                
+                // notesにピクセル位置を追加して保存
+                let newNotes;
+                if (item.product_name === 'MMO') {
+                    // MMO: {text, x, y}形式で保存
+                    let text = notesData;
+                    try {
+                        const parsed = JSON.parse(item.notes || '{}');
+                        text = parsed.text || item.notes || '';
+                    } catch(e) {
+                        text = item.notes || '';
+                    }
+                    newNotes = JSON.stringify({ text: text, x: newX, y: newY });
+                } else {
+                    // SHAP: {type, color, text, x, y}形式で保存
+                    let shapeData = { type: 'circle', color: 'blue', text: '' };
+                    try {
+                        shapeData = JSON.parse(item.notes || '{}');
+                    } catch(e) {}
+                    shapeData.x = newX;
+                    shapeData.y = newY;
+                    newNotes = JSON.stringify(shapeData);
+                }
+                
+                try {
+                    await window.__TAURI__.core.invoke('update_schedule', {
+                        request: {
+                            id: itemId,
+                            notes: newNotes
+                        }
+                    });
+                    // ローカルのitem.notesも更新
+                    item.notes = newNotes;
+                } catch (err) {
+                    console.error('位置更新エラー:', err);
+                }
+            }
 
-        iteml.appendChild(deleteBtn);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
 
         overlay.appendChild(iteml);
 
@@ -2591,7 +2788,7 @@ function calculateLanes(schedules) {
 
 function createGanttBar(schedule, dayStart6AM, laneIndex) {
 
-    const bar = document.createlement("div");
+    const bar = document.createElement("div");
 
     bar.className = "gantt-bar";
 
@@ -2669,7 +2866,7 @@ if (schedule.product_name === "MMO") {
 
           // メモコンテ��
 
-          const memoContent = document.createlement("div");
+          const memoContent = document.createElement("div");
 
           memoContent.style.display = "flex";
 
@@ -2683,7 +2880,7 @@ if (schedule.product_name === "MMO") {
 
           
 
-          const noteSpan = document.createlement("span");
+          const noteSpan = document.createElement("span");
 
           noteSpan.className = "bar-product";
 
@@ -2701,7 +2898,7 @@ if (schedule.product_name === "MMO") {
 
           // 削除ボタン
 
-          const deleteBtn = document.createlement("button");
+          const deleteBtn = document.createElement("button");
 
           deleteBtn.className = "memo-delete-btn";
 
@@ -2823,7 +3020,7 @@ if (schedule.product_name === "MMO") {
 
           // 図形コンテ��
 
-          const shapeContent = document.createlement("div");
+          const shapeContent = document.createElement("div");
 
           shapeContent.style.display = "flex";
 
@@ -2845,7 +3042,7 @@ if (schedule.product_name === "MMO") {
 
           
 
-          const shapeSpan = document.createlement("span");
+          const shapeSpan = document.createElement("span");
 
           shapeSpan.style.fontSize = "24px";
 
@@ -2865,7 +3062,7 @@ if (schedule.product_name === "MMO") {
 
           // 削除ボタン
 
-          const deleteBtn = document.createlement("button");
+          const deleteBtn = document.createElement("button");
 
           deleteBtn.textContent = "×";
 
@@ -2943,7 +3140,7 @@ if (schedule.product_name === "MMO") {
 
           const schedNo = schedule.schedule_number || schedule.kintone_record_id || "";
 
-          const productSpan = document.createlement("span");
+          const productSpan = document.createElement("span");
 
           productSpan.className = "bar-product";
 
@@ -2957,7 +3154,7 @@ if (schedule.product_name === "MMO") {
 
           if (qty) {
 
-              const qtySpan = document.createlement("span");
+              const qtySpan = document.createElement("span");
 
               qtySpan.className = "bar-quantity";
 
@@ -2973,7 +3170,7 @@ if (schedule.product_name === "MMO") {
 
     // ステ�タスラベルを追加
 
-    const statusSpan = document.createlement("span");
+    const statusSpan = document.createElement("span");
 
     statusSpan.className = "bar-status";
 
@@ -2995,7 +3192,7 @@ if (schedule.product_name === "MMO") {
 
     if (schedule.notes) {
 
-        const notesSpan = document.createlement("span");
+        const notesSpan = document.createElement("span");
 
         notesSpan.className = "bar-notes";
 
@@ -3074,16 +3271,6 @@ function getSyncStatusText(status) {
     };
 
     return map[status] || status;
-
-
-
-
-
-
-
-
-
-
 
 }
 }

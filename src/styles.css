@@ -790,3 +790,10 @@ body {
     display: none !important;
 }
 
+/* オーバーレイアイテム（メモ・図形）のスタイル - 完全枠なし */
+.gantt-overlay > div {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    outline: none !important;
+}

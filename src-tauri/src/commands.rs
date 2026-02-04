@@ -46,8 +46,9 @@ pub struct KintoneConfigRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateScheduleRequest {
     pub id: i64,
-    pub start_datetime: String,
+    pub start_datetime: Option<String>,
     pub end_datetime: Option<String>,
+    pub notes: Option<String>,
 }
 
 /// レスポンス
@@ -97,8 +98,8 @@ pub async fn add_schedule(request: AddScheduleRequest, state: State<'_, AppState
 /// 方法B: kintone即時同期版
 #[cfg(feature = "kintone-immediate-sync")]
 async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
-    // MEMOの場合はkintone同期せずローカルのみ保存
-    if request.product_name == "MEMO" || request.product_name == "SHAPE" {
+    // MMO（メモ）とSHAP（図形）の場合はkintone同期せずローカルのみ保存
+    if request.product_name == "MMO" || request.product_name == "SHAP" {
         return add_memo_local_only(request, state);
     }
 
@@ -328,17 +329,33 @@ fn add_schedule_local_only(request: AddScheduleRequest, state: State<'_, AppStat
 #[tauri::command]
 pub fn update_schedule(request: UpdateScheduleRequest, state: State<AppState>) -> ApiResponse<()> {
     let db = state.db.lock().unwrap();
-    match db.update_schedule_datetime(request.id, &request.start_datetime, request.end_datetime.as_deref()) {
-        Ok(_) => ApiResponse {
-            success: true,
-            data: Some(()),
-            error: None,
-        },
-        Err(e) => ApiResponse {
-            success: false,
-            data: None,
-            error: Some(e.to_string()),
-        },
+    
+    // 日時の更新
+    if let Some(ref start) = request.start_datetime {
+        if let Err(e) = db.update_schedule_datetime(request.id, start, request.end_datetime.as_deref()) {
+            return ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e.to_string()),
+            };
+        }
+    }
+    
+    // notesの更新
+    if let Some(ref notes) = request.notes {
+        if let Err(e) = db.update_schedule_notes(request.id, notes) {
+            return ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e.to_string()),
+            };
+        }
+    }
+    
+    ApiResponse {
+        success: true,
+        data: Some(()),
+        error: None,
     }
 }
 
