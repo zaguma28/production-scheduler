@@ -439,35 +439,85 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
-// アプリモードを取得して適用
+// アプリモードを取得して適用（パスワード式）
+const ADMIN_PASSWORD = "admin69";
+let pollingInterval = null;
 
 async function initAppMode() {
+    const modeDialog = document.getElementById('mode-dialog');
+    const btnWorker = document.getElementById('btn-worker-mode');
+    const btnAdmin = document.getElementById('btn-admin-mode');
+    const passwordInput = document.getElementById('admin-password');
+    const modeError = document.getElementById('mode-error');
 
-    try {
-
-        const response = await invoke("get_app_mode");
-
-        if (response.success && response.data) {
-
-            appMode = response.data;
-
-            console.log("App mode:", appMode);
-
-            applyAppMode();
-
-        }
-
-    } catch (error) {
-
-        console.error("Failed to get app mode:", error);
-
-        appMode = "admin"; // fallback
-
+    // 保存されたモードがあれば復元（オプション）
+    const savedMode = localStorage.getItem('appMode');
+    if (savedMode === 'admin') {
+        appMode = 'admin';
+        modeDialog.style.display = 'none';
+        applyAppMode();
+        return;
     }
 
+    return new Promise((resolve) => {
+        // 作業者モードボタン
+        btnWorker.addEventListener('click', () => {
+            appMode = 'worker';
+            localStorage.setItem('appMode', 'worker');
+            modeDialog.style.display = 'none';
+            applyAppMode();
+            startPolling(); // 作業者は自動更新開始
+            resolve();
+        });
+
+        // 管理者モードボタン
+        btnAdmin.addEventListener('click', () => {
+            if (passwordInput.value === ADMIN_PASSWORD) {
+                appMode = 'admin';
+                localStorage.setItem('appMode', 'admin');
+                modeDialog.style.display = 'none';
+                applyAppMode();
+                resolve();
+            } else {
+                modeError.style.display = 'block';
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        });
+
+        // Enterキーでログイン
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') btnAdmin.click();
+        });
+    });
 }
 
+// 3分間隔でkintoneからデータを自動取得（作業者モード用）
+function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    
+    const POLLING_INTERVAL_MS = 3 * 60 * 1000; // 3分
+    
+    pollingInterval = setInterval(async () => {
+        console.log('自動更新: kintoneからデータ取得中...');
+        try {
+            await handleSyncFromKintone();
+            console.log('自動更新: 完了');
+        } catch (err) {
+            console.error('自動更新エラー:', err);
+        }
+    }, POLLING_INTERVAL_MS);
+    
+    console.log('自動更新開始: 3分間隔');
+}
 
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('自動更新停止');
+    }
+}
 
 // kintone設定を初期化（デフォルト値を設定！
 
@@ -540,7 +590,7 @@ function applyAppMode() {
         "btn-test-data",
 
         "btn-sync-to-kintone",
-
+        "btn-copy-prev-shapes",
         "btn-settings"
 
     ];
@@ -758,7 +808,7 @@ function initlements() {
     elements.syncStatus = document.getElementById("sync-status");
 
     elements.btnTestData = document.getElementById("btn-test-data");
-
+    elements.btnCopyPrevShapes = document.getElementById("btn-copy-prev-shapes");
 }
 
 
@@ -807,6 +857,94 @@ async function handleSaveSettings(e) {
 
     }
 
+}
+
+// 前日の図形・メモをコピー
+async function handleCopyPrevShapes() {
+    if (!confirm('前日（昨日）のメモ・図形を、現在表示中の日付にコピーしますか？')) return;
+
+    setStatus("コピー処理中...");
+
+    try {
+        // 現在の日付（表示中の日付）
+        const targetDate = new Date(currentDate);
+        
+        // 前日
+        const prevDate = new Date(currentDate);
+        prevDate.setDate(prevDate.getDate() - 1);
+        console.log('Copy Target Date:', targetDate.toLocaleDateString(), 'Prev Date:', prevDate.toLocaleDateString());
+
+        // 前日のMMO/SHAPを探す
+        const prevItems = schedules.filter(s => {
+            if (s.product_name !== 'MMO' && s.product_name !== 'SHAP') return false;
+            if (!s.start_datetime) return false;
+            
+            const sDate = new Date(s.start_datetime);
+            const isMatch = sDate.getFullYear() === prevDate.getFullYear() &&
+                   sDate.getMonth() === prevDate.getMonth() &&
+                   sDate.getDate() === prevDate.getDate();
+            if (isMatch) console.log('Found Prev Item:', s);
+            return isMatch;
+        });
+
+        if (prevItems.length === 0) {
+            alert("前日のメモ・図形が見つかりませんでした");
+            setStatus("前日のメモ・図形なし", true);
+            return;
+        }
+
+        let successCount = 0;
+
+        for (const item of prevItems) {
+            // 日付をターゲット（今日）に書き換える
+            const newStart = new Date(item.start_datetime);
+            newStart.setFullYear(targetDate.getFullYear());
+            newStart.setMonth(targetDate.getMonth());
+            newStart.setDate(targetDate.getDate());
+            
+            const newEnd = item.end_datetime ? new Date(item.end_datetime) : new Date(newStart);
+            if (item.end_datetime) {
+                newEnd.setFullYear(targetDate.getFullYear());
+                newEnd.setMonth(targetDate.getMonth());
+                newEnd.setDate(targetDate.getDate());
+            }
+
+            //フォーマット関数 (YYYY-MM-DD HH:mm:ss)
+            const fmt = (d) => {
+                const pad = n => n.toString().padStart(2,'0');
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            };
+
+            const request = {
+                product_name: item.product_name,
+                line: item.line || 'Line1', // Lineが必須ならデフォルト値
+                start_datetime: fmt(newStart),
+                end_datetime: fmt(newEnd),
+                quantity1: item.quantity1 || 0,
+                total_quantity: item.total_quantity || 0,
+                notes: item.notes,
+                remarks: item.remarks,
+                production_status: "未生産" // ステータスは未生産にリセット
+            };
+
+            // ここでkintone同期付き追加を呼ぶ
+            const res = await invoke('add_schedule_with_kintone_sync', { request });
+            console.log('Copy Result:', JSON.stringify(res));
+            if (!res.success) {
+                console.error('Copy Failed:', res.error);
+                setStatus('コピー失敗: ' + res.error, true);
+            }
+            successCount++;
+        }
+
+        setStatus(`${successCount}件のメモ・図形をコピーしました`);
+        await loadSchedules();
+        renderGantt();
+
+    } catch (err) {
+        console.error("コピーエラー:", err);
+        setStatus("コピーに失敗しました: " + err, true);
+    }
 }
 
 
@@ -1050,6 +1188,9 @@ function initventListeners() {
     elements.btnSyncFrom.addEventListener("click", handleSyncFromKintone); // Bound
 
     elements.btnSyncTo.addEventListener("click", handleSyncToKintone);
+    if (elements.btnCopyPrevShapes) {
+        elements.btnCopyPrevShapes.addEventListener("click", handleCopyPrevShapes);
+    }
 
 
 
@@ -2361,8 +2502,18 @@ function renderOverlayItems(container, startDate) {
 
 
     overlayItems.forEach(item => {
-
         if (!item.start_datetime) return;
+
+        // 日付チェック：表示中の日付（startDate）と一致するものだけ表示
+        const itemDate = new Date(item.start_datetime);
+        const viewDate = new Date(startDate);
+        
+        // 年月日が一致するか確認（時間は無視）
+        if (itemDate.getFullYear() !== viewDate.getFullYear() ||
+            itemDate.getMonth() !== viewDate.getMonth() ||
+            itemDate.getDate() !== viewDate.getDate()) {
+            return;
+        }
 
         // ピクセル位置をnotesから取得（存在すれば）
         let pixelPos = null;
@@ -2452,9 +2603,10 @@ function renderOverlayItems(container, startDate) {
 
             iteml.appendChild(textSpan);
 
-            // ダブルクリックで編集モード
-            textSpan.addEventListener('dblclick', function(e) {
-                e.stopPropagation();
+            // ダブルクリックで編集モード（管理者モードのみ）
+            if (appMode !== 'worker') {
+                textSpan.addEventListener('dblclick', function(e) {
+                    e.stopPropagation();
                 const input = document.createElement('textarea');
                 input.value = textSpan.textContent;
                 input.style.cssText = 'width:100%;height:100%;border:1px solid #007AFF;border-radius:4px;padding:4px;font-size:14px;resize:none;outline:none;';
@@ -2496,6 +2648,7 @@ function renderOverlayItems(container, startDate) {
                     }
                 });
             });
+            } // ダブルクリック編集のifブロック終了
 
         } else if (item.product_name === 'SHAP') {
 
@@ -2521,33 +2674,36 @@ function renderOverlayItems(container, startDate) {
 
         }
 
-        // 右クリックで削除メニュー
-        iteml.addEventListener('contextmenu', async (e) => {
-            e.preventDefault();
-            if (confirm('削除しますか？')) {
-                try {
-                    await window.__TAURI__.core.invoke('delete_schedule', { id: item.id });
-                    await loadSchedules();
-                    renderGantt();
-                } catch (err) { alert('削除に失敗しました'); }
-            }
-        });
+        // 右クリックで削除メニュー（管理者モードのみ）
+        if (appMode !== 'worker') {
+            iteml.addEventListener('contextmenu', async (e) => {
+                e.preventDefault();
+                if (confirm('削除しますか？')) {
+                    try {
+                        await window.__TAURI__.core.invoke('delete_schedule', { id: item.id });
+                        await loadSchedules();
+                        renderGantt();
+                    } catch (err) { alert('削除に失敗しました'); }
+                }
+            });
+        }
 
-        // リサイズハンドル（右下）
-        const resizeHandle = document.createElement('div');
-        resizeHandle.className = 'resize-handle';
-        resizeHandle.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;background:rgba(0,122,255,0.5);border-radius:0 0 4px 0;pointer-events:auto;z-index:10;';
-        resizeHandle.innerHTML = '⤡';
-        resizeHandle.style.fontSize = '12px';
-        resizeHandle.style.display = 'flex';
-        resizeHandle.style.alignItems = 'center';
-        resizeHandle.style.justifyContent = 'center';
-        resizeHandle.style.color = '#fff';
-        resizeHandle.style.fontWeight = 'bold';
-        iteml.appendChild(resizeHandle);
+        // リサイズハンドル（右下）- 管理者モードのみ表示
+        if (appMode !== 'worker') {
+            const resizeHandle = document.createElement('div');
+            resizeHandle.className = 'resize-handle';
+            resizeHandle.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;background:rgba(0,122,255,0.5);border-radius:0 0 4px 0;pointer-events:auto;z-index:10;';
+            resizeHandle.innerHTML = '⤡';
+            resizeHandle.style.fontSize = '12px';
+            resizeHandle.style.display = 'flex';
+            resizeHandle.style.alignItems = 'center';
+            resizeHandle.style.justifyContent = 'center';
+            resizeHandle.style.color = '#fff';
+            resizeHandle.style.fontWeight = 'bold';
+            iteml.appendChild(resizeHandle);
 
-        // リサイズ機能（transform: scaleで中身も拡大縮小）
-        resizeHandle.addEventListener('mousedown', function(e) {
+            // リサイズ機能（transform: scaleで中身も拡大縮小）
+            resizeHandle.addEventListener('mousedown', function(e) {
             e.stopPropagation();
             e.preventDefault();
             const startX = e.clientX;
@@ -2615,11 +2771,17 @@ function renderOverlayItems(container, startDate) {
             
             document.addEventListener('mousemove', onResizeMove);
             document.addEventListener('mouseup', onResizeEnd);
-        });
+            });
+        } // リサイズハンドルのifブロック終了
 
-        // ドラッグ機能を追加
+        // ドラッグ機能を追加（管理者モードのみ）
         iteml.addEventListener('mousedown', function(e) {
-            if (resizeHandle.contains(e.target)) return; // リサイズハンドルは除外
+            // 作業者モードではドラッグ無効
+            if (appMode === 'worker') return;
+            
+            // リサイズハンドルがあればそれは除外
+            const resizeEl = iteml.querySelector('.resize-handle');
+            if (resizeEl && resizeEl.contains(e.target)) return;
             
             const startX = e.clientX;
             const startY = e.clientY;
@@ -3148,6 +3310,16 @@ if (schedule.product_name === "MMO") {
 
           bar.appendChild(productSpan);
 
+          // 製造備考の表示
+          if (schedule.remarks) {
+              const remarksSpan = document.createElement("span");
+              remarksSpan.className = "bar-notes"; // bar-notesクラスを流用
+              remarksSpan.style.fontSize = "12px";
+              remarksSpan.style.marginTop = "2px";
+              remarksSpan.textContent = schedule.remarks;
+              bar.appendChild(remarksSpan);
+          }
+
 
 
           const qty = schedule.total_quantity || schedule.quantity1;
@@ -3220,7 +3392,10 @@ if (schedule.product_name === "MMO") {
 
 
 
-    setupDraggable(bar, schedule, durationMs, dayStart6AM);
+    // 管理者モードのみドラッグ可能
+    if (appMode !== 'worker') {
+        setupDraggable(bar, schedule, durationMs, dayStart6AM);
+    }
 
 
 

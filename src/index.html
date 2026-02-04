@@ -8,6 +8,27 @@
     <script src="chart.min.js"></script>
 </head>
 <body>
+    <!-- モード選択ダイアログ -->
+    <div id="mode-dialog" class="modal" style="display:flex;">
+        <div class="modal-content" style="max-width:400px;text-align:center;">
+            <h2 style="margin-bottom:20px;">🏭 モード選択</h2>
+            <p style="margin-bottom:24px;color:#666;">利用するモードを選択してください</p>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <button id="btn-worker-mode" class="btn btn-primary btn-large" style="width:100%;">
+                    👷 作業者モード（閲覧のみ）
+                </button>
+                <div style="border-top:1px solid #eee;padding-top:16px;margin-top:8px;">
+                    <input type="password" id="admin-password" placeholder="管理者パスワード" 
+                           style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;box-sizing:border-box;">
+                    <button id="btn-admin-mode" class="btn btn-secondary btn-large" style="width:100%;">
+                        🔐 管理者モードでログイン
+                    </button>
+                </div>
+            </div>
+            <p id="mode-error" style="color:red;margin-top:12px;display:none;">パスワードが正しくありません</p>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- ヘッダー -->
         <header class="header">
@@ -18,6 +39,9 @@
                 </button>
                 <button id="btn-sync-from-kintone" class="btn btn-secondary">
                     📥 kintoneから取得
+                </button>
+                <button id="btn-copy-prev-shapes" class="btn btn-secondary" title="前日の図形・メモを今日にコピー">
+                    📋 前日の図形をコピー
                 </button>
                 <button id="btn-sync-to-kintone" class="btn btn-primary">
                     📤 kintoneへ送信
@@ -42,6 +66,21 @@
             <section id="gantt-view" class="view active">
                 <div class="view-header">
                     <h2>ガントチャート</h2>
+                    <!-- 凡例 -->
+                    <div class="status-legend">
+                        <div class="legend-item">
+                            <span class="legend-marker status-inprogress"></span>
+                            <span>生産中</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-marker status-pending"></span>
+                            <span>未生産</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-marker status-completed"></span>
+                            <span>生産終了</span>
+                        </div>
+                    </div>
                     <div class="date-selector">
                         <button id="prev-date" class="btn btn-small">◀</button>
                         <input type="date" id="gantt-date">
@@ -269,7 +308,7 @@
     </div>
     </div>
 
-    <script src="app.js?v=20260204091930"></script>
+    <script src="app.js?v=20260204201000"></script>
 </body>
 </html>
 

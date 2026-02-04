@@ -96,8 +96,8 @@ pub async fn add_schedule(request: AddScheduleRequest, state: State<'_, AppState
 }
 
 /// 方法B: kintone即時同期版
-#[cfg(feature = "kintone-immediate-sync")]
-async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
+#[tauri::command]
+pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
     // MMO（メモ）とSHAP（図形）の場合はkintone同期せずローカルのみ保存
     if request.product_name == "MMO" || request.product_name == "SHAP" {
         return add_memo_local_only(request, state);
@@ -210,7 +210,6 @@ async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: Stat
 }
 
 /// MEMO専用: kintone同期せずローカルのみ保存
-#[cfg(feature = "kintone-immediate-sync")]
 fn add_memo_local_only(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let schedule = LocalSchedule {
@@ -363,10 +362,22 @@ pub fn update_schedule(request: UpdateScheduleRequest, state: State<AppState>) -
 #[tauri::command]
 pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>) -> ApiResponse<()> {
     let kintone_config = KintoneConfig {
-        subdomain: config.subdomain,
+        subdomain: config.subdomain.clone(),
         app_id: config.app_id,
-        api_token: config.api_token,
+        api_token: config.api_token.clone(),
     };
+
+    // 設定をJSONファイルに保存
+    if let Some(config_dir) = dirs::data_local_dir() {
+        let config_path = config_dir.join("production-scheduler").join("kintone_config.json");
+        if let Ok(json) = serde_json::to_string_pretty(&kintone_config) {
+            if let Err(e) = std::fs::write(&config_path, json) {
+                eprintln!("設定ファイルの保存に失敗: {}", e);
+            } else {
+                eprintln!("設定を保存しました: {:?}", config_path);
+            }
+        }
+    }
 
     match KintoneClient::new(kintone_config) {
         Ok(client) => {

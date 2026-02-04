@@ -10,8 +10,23 @@ use commands::AppState;
 use database::Database;
 use kintone_client::{KintoneClient, KintoneConfig};
 
-/// 固定のkintone接続設定
-fn get_default_kintone_config() -> KintoneConfig {
+/// kintone接続設定を読み込み（ファイルがあればそこから、なければデフォルト）
+fn load_kintone_config() -> KintoneConfig {
+    // まずファイルから読み込みを試みる
+    if let Some(config_dir) = dirs::data_local_dir() {
+        let config_path = config_dir.join("production-scheduler").join("kintone_config.json");
+        if config_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&config_path) {
+                if let Ok(config) = serde_json::from_str::<KintoneConfig>(&content) {
+                    eprintln!("設定ファイルから読み込みました: {:?}", config_path);
+                    return config;
+                }
+            }
+        }
+    }
+    
+    // ファイルがなければデフォルト値
+    eprintln!("デフォルト設定を使用します");
     KintoneConfig {
         subdomain: "jfe-rockfiber".to_string(),
         app_id: 351,
@@ -34,8 +49,8 @@ pub fn run() {
     let db = Database::open(db_path.to_str().unwrap())
         .expect("データベースの初期化に失敗しました");
 
-    // kintoneクライアントを初期化（固定設定）
-    let kintone_client = KintoneClient::new(get_default_kintone_config())
+    // kintoneクライアントを初期化（ファイルから読み込み）
+    let kintone_client = KintoneClient::new(load_kintone_config())
         .expect("kintoneクライアントの初期化に失敗しました");
 
     let state = AppState {
@@ -59,6 +74,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_schedules,
             commands::add_schedule,
+            commands::add_schedule_with_kintone_sync,
             commands::update_schedule,
             commands::save_kintone_config,
             commands::fetch_from_kintone,
