@@ -98,10 +98,10 @@ pub async fn add_schedule(request: AddScheduleRequest, state: State<'_, AppState
 /// 方法B: kintone即時同期版
 #[tauri::command]
 pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: State<'_, AppState>) -> Result<ApiResponse<i64>, ()> {
-    // MMO（メモ）とSHAP（図形）の場合はkintone同期せずローカルのみ保存
-    if request.product_name == "MMO" || request.product_name == "SHAP" {
-        return add_memo_local_only(request, state);
-    }
+    // MMO（メモ）とSHAP（図形）もkintone同期する
+    // if request.product_name == "MMO" || request.product_name == "SHAP" {
+    //    return add_memo_local_only(request, state);
+    // }
 
     // kintoneクライアントを取得
     let client_opt = {
