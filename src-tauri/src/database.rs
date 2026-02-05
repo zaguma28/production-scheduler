@@ -329,6 +329,19 @@ impl Database {
         Ok(result.flatten())
     }
 
+    /// IDでスケジュールからproduct_nameを取得
+    pub fn get_product_name_for_schedule(&self, id: i64) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT product_name FROM schedules WHERE id = ?1"
+        )?;
+
+        let result: Option<String> = stmt.query_row(params![id], |row| {
+             Ok(row.get(0)?)
+        }).ok();
+
+        Ok(result)
+    }
+
     pub fn delete_schedule(&self, id: i64) -> Result<()> {
         self.conn.execute(
             "DELETE FROM schedules WHERE id = ?1",

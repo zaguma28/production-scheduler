@@ -529,7 +529,11 @@ async function initKintoneConfig() {
 
         app_id: 506,
 
-        api_token: "3CakeA8SORFDrOawAcL3Y2UY8TogZkLw52U5RBo"
+        api_token: "3CakeA8SORFDrOawAcL3Y2UY8TogZkLw52U5RBo",
+
+        memo_app_id: 507,
+
+        memo_api_token: "hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL"
 
     };
 
@@ -543,6 +547,10 @@ async function initKintoneConfig() {
 
     const apiTokenl = document.getElementById("api-token");
 
+    const memoAppIdl = document.getElementById("memo-app-id");
+
+    const memoApiTokenl = document.getElementById("memo-api-token");
+
     
 
     if (subdomainl) subdomainl.value = defaultConfig.subdomain;
@@ -550,6 +558,10 @@ async function initKintoneConfig() {
     if (appIdl) appIdl.value = defaultConfig.app_id;
 
     if (apiTokenl) apiTokenl.value = defaultConfig.api_token;
+
+    if (memoAppIdl) memoAppIdl.value = defaultConfig.memo_app_id;
+
+    if (memoApiTokenl) memoApiTokenl.value = defaultConfig.memo_api_token;
 
     
 
@@ -827,7 +839,11 @@ async function handleSaveSettings(e) {
 
         app_id: parseInt(document.getElementById("app-id").value),
 
-        api_token: document.getElementById("api-token").value
+        api_token: document.getElementById("api-token").value,
+
+        memo_app_id: parseInt(document.getElementById("memo-app-id").value || "0"),
+
+        memo_api_token: document.getElementById("memo-api-token").value
 
     };
 
@@ -1806,8 +1822,8 @@ async function handleAddSchedule(e) {
 
         production_status: "未生産",
 
-        notes: document.getElementById("notes").value || null
-
+        notes: document.getElementById("notes").value || null,
+        efficiency: document.getElementById("efficiency").value || null
     };
 
 

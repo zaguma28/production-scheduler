@@ -8,10 +8,13 @@ use chrono::{DateTime, Utc};
 
 /// kintone接続設定
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KintoneConfig {
     pub subdomain: String,
     pub app_id: u32,
     pub api_token: String,
+    pub memo_app_id: Option<u32>,
+    pub memo_api_token: Option<String>,
 }
 
 /// 生産スケジュールレコード
@@ -55,6 +58,18 @@ impl KintoneClient {
         format!("https://{}.cybozu.com/k/v1", self.config.subdomain)
     }
 
+    /// 対象のアプリIDとトークンを取得
+    pub fn get_app_credentials(&self, is_memo: bool) -> (u32, String) {
+        if is_memo {
+            (
+                self.config.memo_app_id.unwrap_or(self.config.app_id),
+                self.config.memo_api_token.clone().unwrap_or(self.config.api_token.clone())
+            )
+        } else {
+            (self.config.app_id, self.config.api_token.clone())
+        }
+    }
+
     /// レコードを取得
     pub async fn get_records(&self, query: Option<&str>) -> Result<serde_json::Value> {
         let url = format!("{}/records.json", self.base_url());
@@ -88,11 +103,12 @@ impl KintoneClient {
     }
 
     /// レコードを追加
-    pub async fn add_record(&self, record: serde_json::Value) -> Result<u32> {
+    pub async fn add_record(&self, record: serde_json::Value, is_memo: bool) -> Result<u32> {
         let url = format!("{}/record.json", self.base_url());
+        let (app_id, api_token) = self.get_app_credentials(is_memo);
 
         let body = serde_json::json!({
-            "app": self.config.app_id,
+            "app": app_id,
             "record": record
         });
 
@@ -102,7 +118,7 @@ impl KintoneClient {
 
         let response = self.client
             .post(&url)
-            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .header("X-Cybozu-API-Token", &api_token)
             .header(header::CONTENT_TYPE, "application/json")
             .json(&body)
             .send()
@@ -127,18 +143,19 @@ impl KintoneClient {
     }
 
     /// レコードを更新
-    pub async fn update_record(&self, record_id: u32, record: serde_json::Value) -> Result<()> {
+    pub async fn update_record(&self, record_id: u32, record: serde_json::Value, is_memo: bool) -> Result<()> {
         let url = format!("{}/record.json", self.base_url());
+        let (app_id, api_token) = self.get_app_credentials(is_memo);
 
         let body = serde_json::json!({
-            "app": self.config.app_id,
+            "app": app_id,
             "id": record_id,
             "record": record
         });
 
         self.client
             .put(&url)
-            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .header("X-Cybozu-API-Token", &api_token)
             .header(header::CONTENT_TYPE, "application/json")
             .json(&body)
             .send()
@@ -184,11 +201,12 @@ impl KintoneClient {
     }
 
     /// レコードを削除
-    pub async fn delete_record(&self, record_id: u32) -> Result<()> {
+    pub async fn delete_record(&self, record_id: u32, is_memo: bool) -> Result<()> {
         let url = format!("{}/records.json", self.base_url());
+        let (app_id, api_token) = self.get_app_credentials(is_memo);
 
         let body = serde_json::json!({
-            "app": self.config.app_id,
+            "app": app_id,
             "ids": [record_id]
         });
 
@@ -198,7 +216,7 @@ impl KintoneClient {
 
         let response = self.client
             .delete(&url)
-            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .header("X-Cybozu-API-Token", &api_token)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .json(&body)
             .send()

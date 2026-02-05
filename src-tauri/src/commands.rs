@@ -32,6 +32,7 @@ pub struct AddScheduleRequest {
     pub total_quantity: Option<f64>,
     pub production_status: Option<String>,
     pub notes: Option<String>,
+    pub efficiency: Option<String>,
 }
 
 /// kintone設定リクエスト
@@ -40,6 +41,8 @@ pub struct KintoneConfigRequest {
     pub subdomain: String,
     pub app_id: u32,
     pub api_token: String,
+    pub memo_app_id: Option<u32>,
+    pub memo_api_token: Option<String>,
 }
 
 /// スケジュール更新リクエスト
@@ -127,19 +130,31 @@ pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: 
     };
     eprintln!("=== Generated schedule number: {} ===", schedule_number);
 
-    // kintoneにレコードを追加（スケジュール番号含む）
-    let record = serde_json::json!({
-        "product_name": { "value": request.product_name },
-        "line": { "value": request.line },
-        "start_datetime": { "value": request.start_datetime },
-        "end_datetime": { "value": request.end_datetime },
-        "quantity": { "value": request.quantity1.map(|v| v.to_string()) },
-        "total_quantity": { "value": request.total_quantity.map(|v| v.to_string()) },
-        "status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
-        "schedule_number": { "value": schedule_number.clone() },
-    });
+    let is_memo = request.product_name == "MMO" || request.product_name == "SHAP";
+    let record = if is_memo {
+        // ID 507: メモ・図形用
+        serde_json::json!({
+            "product_name": { "value": request.product_name }, // 種別
+            "notes": { "value": request.notes.clone().unwrap_or_default() }, // 内容
+            "start_datetime": { "value": request.start_datetime },
+            "end_datetime": { "value": request.end_datetime },
+            "production_status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
+        })
+    } else {
+        // ID 506: スケジュール用
+        serde_json::json!({
+            "product_name": { "value": request.product_name },
+            "start_datetime": { "value": request.start_datetime },
+            "end_datetime": { "value": request.end_datetime },
+            "生産數量": { "value": request.quantity1.map(|v| v.to_string()) },
+            "status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
+            "schedule_number": { "value": schedule_number.clone() },
+            "製造備考": { "value": request.notes.clone().unwrap_or_default() },
+            "製綿能率": { "value": request.efficiency.clone().unwrap_or_default() },
+        })
+    };
 
-    let kintone_id = match client.add_record(record).await {
+    let kintone_id = match client.add_record(record, is_memo).await {
         Ok(id) => id,
         Err(e) => {
             eprintln!("kintone add_record error: {}", e);
@@ -172,7 +187,7 @@ pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: 
         quantity7: request.quantity7,
         quantity8: request.quantity8,
         total_quantity: request.total_quantity,
-        efficiency1: None,
+        efficiency1: request.efficiency,
         efficiency2: None,
         efficiency3: None,
         efficiency4: None,
@@ -287,7 +302,7 @@ fn add_schedule_local_only(request: AddScheduleRequest, state: State<'_, AppStat
         quantity7: request.quantity7,
         quantity8: request.quantity8,
         total_quantity: request.total_quantity,
-        efficiency1: None,
+        efficiency1: request.efficiency,
         efficiency2: None,
         efficiency3: None,
         efficiency4: None,
@@ -365,6 +380,8 @@ pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>)
         subdomain: config.subdomain.clone(),
         app_id: config.app_id,
         api_token: config.api_token.clone(),
+        memo_app_id: config.memo_app_id,
+        memo_api_token: config.memo_api_token.clone(),
     };
 
     // 設定をJSONファイルに保存
@@ -480,9 +497,6 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                         continue;
                     }
 
-                    // 分類（ライン名）- SINGLE_LINE_TEXT
-                    let line = get_string_value(&record, "line");
-
                     // 開始日時1 - DATETIME
                     let start_datetime = get_string_value(&record, "start_datetime");
 
@@ -493,18 +507,11 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                     let production_status = get_string_value(&record, "status");
                     let production_status = if production_status.is_empty() { "予定".to_string() } else { production_status };
 
-                    // 内製造備考1 - SINGLE_LINE_TEXT
-                    let notes = get_optional_string_value(&record, "内製造備考1");
+                    // 製造備考 - SINGLE_LINE_TEXT
+                    let notes = get_optional_string_value(&record, "製造備考");
 
-                    // 製綿能率1-8 - DROP_DOWN (kintoneドロップダウン値)
-                    let efficiency1 = get_optional_string_value(&record, "製綿能率1");
-                    let efficiency2 = get_optional_string_value(&record, "製綿能率2");
-                    let efficiency3 = get_optional_string_value(&record, "製綿能率3");
-                    let efficiency4 = get_optional_string_value(&record, "製綿能率4");
-                    let efficiency5 = get_optional_string_value(&record, "製綿能率5");
-                    let efficiency6 = get_optional_string_value(&record, "製綿能率6");
-                    let efficiency7 = get_optional_string_value(&record, "製綿能率7");
-                    let efficiency8 = get_optional_string_value(&record, "製綿能率8");
+                    // 製綿能率 - DROP_DOWN
+                    let efficiency1 = get_optional_string_value(&record, "製綿能率");
 
                     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -513,26 +520,26 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                         kintone_record_id: Some(kintone_id),
                         schedule_number: schedule_number.clone(),
                         product_name: product_name.clone(),
-                        line,
+                        line: "".to_string(), // kintoneから削除されたため空文字
                         start_datetime,
                         end_datetime,
-                        quantity1: get_number_value(&record, "quantity"),
-                        quantity2: get_number_value(&record, "生産数量2"),
-                        quantity3: get_number_value(&record, "生産数量3"),
-                        quantity4: get_number_value(&record, "生産数量4"),
-                        quantity5: get_number_value(&record, "生産数量5"),
-                        quantity6: get_number_value(&record, "生産数量6"),
-                        quantity7: get_number_value(&record, "生産数量7"),
-                        quantity8: get_number_value(&record, "生産数量8"),
-                        total_quantity: get_number_value(&record, "total_quantity"),
+                        quantity1: get_number_value(&record, "生産数量"),
+                        quantity2: None,
+                        quantity3: None,
+                        quantity4: None,
+                        quantity5: None,
+                        quantity6: None,
+                        quantity7: None,
+                        quantity8: None,
+                        total_quantity: None,
                         efficiency1: efficiency1.clone(),
-                        efficiency2,
-                        efficiency3,
-                        efficiency4,
-                        efficiency5,
-                        efficiency6,
-                        efficiency7,
-                        efficiency8,
+                        efficiency2: None,
+                        efficiency3: None,
+                        efficiency4: None,
+                        efficiency5: None,
+                        efficiency6: None,
+                        efficiency7: None,
+                        efficiency8: None,
                         production_status,
                         notes,
                         sync_status: "synced".to_string(),
@@ -589,24 +596,36 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
         let mut synced_count = 0u32;
 
         for schedule in pending_schedules {
-            let record = serde_json::json!({
-                "product_name": { "value": schedule.product_name },
-                "line": { "value": schedule.line },
-                "start_datetime": { "value": schedule.start_datetime },
-                "end_datetime": { "value": schedule.end_datetime },
-                "quantity": { "value": schedule.quantity1.map(|v| v.to_string()) },
-                "total_quantity": { "value": schedule.total_quantity.map(|v| v.to_string()) },
-                "status": { "value": schedule.production_status.clone() },
-            });
+            let is_memo = schedule.product_name == "MMO" || schedule.product_name == "SHAP";
+            
+            let record = if is_memo {
+                serde_json::json!({
+                    "product_name": { "value": schedule.product_name },
+                    "notes": { "value": schedule.notes.clone().unwrap_or_default() },
+                    "start_datetime": { "value": schedule.start_datetime },
+                    "end_datetime": { "value": schedule.end_datetime },
+                    "production_status": { "value": schedule.production_status.clone() },
+                })
+            } else {
+                serde_json::json!({
+                    "product_name": { "value": schedule.product_name },
+                    "start_datetime": { "value": schedule.start_datetime },
+                    "end_datetime": { "value": schedule.end_datetime },
+                    "生産数量": { "value": schedule.quantity1.map(|v| v.to_string()) },
+                    "status": { "value": schedule.production_status.clone() },
+                    "製造備考": { "value": schedule.notes.clone().unwrap_or_default() },
+                    "製綿能率": { "value": schedule.efficiency1.clone().unwrap_or_default() },
+                })
+            };
 
             if let Some(kintone_id) = schedule.kintone_record_id {
-                if client.update_record(kintone_id, record).await.is_ok() {
+                if client.update_record(kintone_id, record, is_memo).await.is_ok() {
                     let db = state.db.lock().unwrap();
                     let _ = db.update_sync_status(schedule.id.unwrap(), "synced", Some(kintone_id));
                     synced_count += 1;
                 }
             } else {
-                if let Ok(new_id) = client.add_record(record).await {
+                if let Ok(new_id) = client.add_record(record, is_memo).await {
                     let db = state.db.lock().unwrap();
                     let _ = db.update_sync_status(schedule.id.unwrap(), "synced", Some(new_id));
                     synced_count += 1;
@@ -640,18 +659,30 @@ pub async fn delete_schedule(id: i64, state: State<'_, AppState>) -> Result<ApiR
     // kintoneからも削除（kintone-immediate-sync feature有効時）
     #[cfg(feature = "kintone-immediate-sync")]
     if let Some(kintone_id) = kintone_record_id {
+        // メモ/図形かどうかを判定するためにproduct_nameが必要
+        // すでに削除済みかもしれないが、DBにはあるはず
+        // ここでは簡単な判定として、DBから取得しておいた product_name (MMO/SHAP) を使うなどのロジックが必要だが
+        // 現状の delete_scheduleシグネチャでは id しかわからないため
+        // まずDBから取得する
+        let product_name = {
+            let db = state.db.lock().unwrap();
+            db.get_product_name_for_schedule(id).ok().flatten().unwrap_or_default()
+        };
+
+        let is_memo = product_name == "MMO" || product_name == "SHAP";
+
         let client_opt = {
             let kintone = state.kintone_client.lock().unwrap();
             kintone.clone()
         };
 
         if let Some(client) = client_opt {
-            if let Err(e) = client.delete_record(kintone_id).await {
-                eprintln!("kintone delete error: {}", e);
+            if let Err(e) = client.delete_record(kintone_id, is_memo).await {
+                eprintln!("Failed to delete from kintone: {}", e);
+                // kintone削除失敗でもローカルは削除を進める（不整合防止のため）
             }
         }
     }
-
     // ローカルDBから削除
     let db = state.db.lock().unwrap();
     match db.delete_schedule(id) {
