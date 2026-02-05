@@ -6,7 +6,7 @@ const { invoke } = window.__TAURI__.core;
 
 
 
-// 製品��量�スタ
+// 製品重量マスタ
 
 const productWeights = {
 
@@ -43,7 +43,7 @@ function getSyncStatusText(status) {
     return map[status] || status;
 }
 
-// アプリケーション状慁
+// アプリケーション状態
 
 function setStatus(message, isrror = false) {
 
@@ -73,7 +73,7 @@ function initMemoModal() {
 
 
 
-    // 閉じる�タン
+    // 閉じるボタン
 
     memoClose?.addEventListener("click", () => {
 
@@ -174,7 +174,7 @@ function initMemoModal() {
 
 
 
-    // コンテ��ストメニュー用の変数
+    // コンテキストメニュー用の変数
 
     let contextClickedTime = null;
 
@@ -182,7 +182,7 @@ function initMemoModal() {
 
     
 
-    // クリック��でコンテ��ストメニューを閉じる
+    // クリック時でコンテキストメニューを閉じる
 
     document.addEventListener("click", () => {
 
@@ -192,7 +192,7 @@ function initMemoModal() {
 
     
 
-    // コンテ��ストメニューのホバー効果
+    // コンテキストメニューのホバー効果
 
     document.querySelectorAll(".context-menu-item").forEach(item => {
 
@@ -204,7 +204,7 @@ function initMemoModal() {
 
     
 
-    // コンテ��ストメニューのアクション
+    // コンテキストメニューのアクション
 
     document.querySelector('[data-action="add-memo"]')?.addEventListener("click", () => {
 
@@ -226,7 +226,7 @@ function initMemoModal() {
 
 
 
-    // ガントチャートに右クリック��でコンテ��ストメニュー表示
+    // ガントチャートに右クリック時でコンテキストメニュー表示
 
     document.getElementById("gantt-container")?.addEventListener("contextmenu", (e) => {
 
@@ -234,7 +234,7 @@ function initMemoModal() {
 
 
 
-        // クリック��位置から日時を計算
+        // クリック時位置から日時を計算
 
         const row = e.target.closest(".gantt-row");
 
@@ -268,7 +268,7 @@ function initMemoModal() {
 
 
 
-        // コンテ��ストメニューを表示
+        // コンテキストメニューを表示
 
         if (contextMenu) {
 
@@ -421,11 +421,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await initKintoneConfig();
 
-    createTooltiplement();
+    createTooltipElement();
 
-    initlements();
+    initElements();
 
-    initventListeners();
+    initEventListeners();
 
     await loadSchedules();
 
@@ -535,7 +535,7 @@ async function initKintoneConfig() {
 
     
 
-    // フォームに初期値を設宁
+    // フォームに初期値を設定
 
     const subdomainl = document.getElementById("subdomain");
 
@@ -567,7 +567,7 @@ async function initKintoneConfig() {
 
     } catch (error) {
 
-        console.error("kintone設定�初期化に失敁", error);
+        console.error("kintone設定�初期化に失敗", error);
 
     }
 
@@ -583,7 +583,7 @@ function applyAppMode() {
 
     
 
-    // 作業老��ードで非表示にする要素
+    // 作業者ードで非表示にする要素
 
     const adminOnlyElements = [
 
@@ -597,7 +597,7 @@ function applyAppMode() {
 
     
 
-    // タブを制御��新規追加タブ�作業老��ードで非表示��
+    // タブを制御新規追加タブ�作業者ードで非表示
 
     const addTab = document.querySelector('.tab[data-tab="add"]');
 
@@ -645,9 +645,9 @@ function applyAppMode() {
 
 }
 
-// カスタムテ�ルチップ要素を作�
+// カスタムツールチップ要素を作成
 
-function createTooltiplement() {
+function createTooltipElement() {
 
     const tooltip = document.createElement("div");
 
@@ -661,7 +661,7 @@ function createTooltiplement() {
 
 
 
-// テ�ルチップを表示
+// ツールチップを表示
 
 function showTooltip(e, schedule, qty) {
 
@@ -701,7 +701,7 @@ function showTooltip(e, schedule, qty) {
 
         <div class="tooltip-row">
 
-            <span class="tooltip-label">開姁</span>
+            <span class="tooltip-label">開始</span>
 
             <span class="tooltip-value">${formatDateTime(schedule.start_datetime)}</span>
 
@@ -709,7 +709,7 @@ function showTooltip(e, schedule, qty) {
 
         <div class="tooltip-row">
 
-            <span class="tooltip-label">終亁</span>
+            <span class="tooltip-label">終了</span>
 
             <span class="tooltip-value">${formatDateTime(schedule.end_datetime)}</span>
 
@@ -719,11 +719,11 @@ function showTooltip(e, schedule, qty) {
 
             <span class="tooltip-label">個数:</span>
 
-            <span class="tooltip-value">${qty || "-"} 倁/span>
+            <span class="tooltip-value">${qty || "-"} 個</span>
 
         </div>
 
-        ${schedule.notes ? `<div class="tooltip-row"><span class="tooltip-label">備老</span><span class="tooltip-value">${schedule.notes}</span></div>` : ""}
+        ${schedule.notes ? `<div class="tooltip-row"><span class="tooltip-label">備考</span><span class="tooltip-value">${schedule.notes}</span></div>` : ""}
 
         <div class="tooltip-status ${statusClass}">${displayStatus}</div>
 
@@ -739,7 +739,7 @@ function showTooltip(e, schedule, qty) {
 
     
 
-    // 画面からはみ出さなぁ��ぁ��調整
+    // 画面からはみ出さないない調整
 
     const rect = tooltip.getBoundingClientRect();
 
@@ -759,7 +759,7 @@ function showTooltip(e, schedule, qty) {
 
 
 
-// テ�ルチップを非表示
+// ツールチップを非表示
 
 function hideTooltip() {
 
@@ -777,7 +777,7 @@ function hideTooltip() {
 
 // DOM要素の初期化
 
-function initlements() {
+function initElements() {
 
     elements.tabs = document.querySelectorAll(".tab");
 
@@ -951,7 +951,7 @@ async function handleCopyPrevShapes() {
 
 async function handleSyncFromKintone() {
 
-    setStatus("kintoneからテ�タを取得中...");
+    setStatus("kintoneからデータを取得中...");
 
     try {
 
@@ -983,7 +983,7 @@ async function handleSyncFromKintone() {
 
 async function handleSyncToKintone() {
 
-    setStatus("kintoneへテ�タを送信中...");
+    setStatus("kintoneへデータを送信中...");
 
     try {
 
@@ -1081,7 +1081,7 @@ async function handleGenerateTestData() {
 
             production_status: "未生産",
 
-            notes: `テ��テ{i + 1}`
+            notes: `テスト{i + 1}`
 
         });
 
@@ -1109,7 +1109,7 @@ async function handleGenerateTestData() {
 
 
 
-    setStatus(`${successCount}件のテ��トデータを追加しました`);
+    setStatus(`${successCount}件のストデータを追加しました`);
 
     await loadSchedules();
 
@@ -1119,9 +1119,9 @@ async function handleGenerateTestData() {
 
 
 
-// イベントリスナ�の設宁
+// イベントリスナーの設定
 
-function initventListeners() {
+function initEventListeners() {
 
     elements.tabs.forEach(tab => {
 
@@ -1218,7 +1218,7 @@ function initventListeners() {
 
 
 
-// ドラテ��状態管琁
+// ドラッグ状態管理
 
 const dragState = {
 
@@ -1252,7 +1252,7 @@ const dragState = {
 
 
 
-// ドラテ��有効匁
+// ドラッグ有効化
 
 function setupDraggable(element, schedule, durationMs, dayStart6AM) {
 
@@ -1262,7 +1262,7 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
 
 
 
-        // ドラテ��の準備��まだ開始しなぁ��
+        // ドラッグの準備まだ開始しなぁ
 
         dragState.pendingDrag = true;
 
@@ -1292,7 +1292,7 @@ function setupDraggable(element, schedule, durationMs, dayStart6AM) {
 
 
 
-// ドラテ��を実際に開始する関数
+// ドラッグを実際に開始する関数
 
 function startDrag(e) {
 
@@ -1394,7 +1394,7 @@ function startDrag(e) {
 
 function handleGlobalMouseMove(e) {
 
-    // ドラテ��の準備中で、まだ開始してぁ��ぁ��吁
+    // ドラッグの準備中で、まだ開始していない吁
 
     if (dragState.pendingDrag && !dragState.isDragging) {
 
@@ -1402,7 +1402,7 @@ function handleGlobalMouseMove(e) {
 
         const dy = Math.abs(e.clientY - dragState.startY);
 
-        // 5px以上移動したらドラテ��開姁
+        // 5px以上移動したらドラッグ開始
 
         if (dx > 5 || dy > 5) {
 
@@ -1476,13 +1476,13 @@ function handleGlobalMouseMove(e) {
 
         const previewStart = new Date(targetDate6AM.getTime() + snappedMinutes * 60 * 1000);
 
-        const previewnd = new Date(previewStart.getTime() + dragState.durationMs);
+        const previewEnd = new Date(previewStart.getTime() + dragState.durationMs);
 
 
 
         const formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 
-        const timeText = `${formatTime(previewStart)} - ${formatTime(previewnd)}`;
+        const timeText = `${formatTime(previewStart)} - ${formatTime(previewEnd)}`;
 
 
 
@@ -1520,7 +1520,7 @@ function handleGlobalMouseMove(e) {
 
 async function handleGlobalMouseUp(e) {
 
-    // pendingDragのみの場合（クリック��だけでドラテ��開始してぁ��ぁ���リセテ��して終亁
+    // pendingDragのみの場合（クリック時だけでドラッグ開始していない�リセテして終了
 
     if (dragState.pendingDrag && !dragState.isDragging) {
 
@@ -1598,7 +1598,7 @@ async function handleGlobalMouseUp(e) {
 
         const newStart = new Date(targetDate6AM.getTime() + snappedMinutes * 60 * 1000);
 
-        const newnd = new Date(newStart.getTime() + durationMs);
+        const newEnd = new Date(newStart.getTime() + durationMs);
 
 
 
@@ -1610,7 +1610,7 @@ async function handleGlobalMouseUp(e) {
 
                 start_datetime: formatIsoString(newStart),
 
-                end_datetime: formatIsoString(newnd)
+                end_datetime: formatIsoString(newEnd)
 
             };
 
@@ -1858,7 +1858,7 @@ function calculateTotals() {
 
     
 
-    // フォーム要素の親div��非表示刁��替え用��
+    // フォーム要素の親div非表示切替え用
 
     const quantityGroup = quantityInput.closest('.form-group');
 
@@ -1880,7 +1880,7 @@ function calculateTotals() {
 
 
 
-    // MMOモード�場合�UI刁��替ぁ
+    // MMOモードの場合のUI切替ぁ
 
     if (productName === "MMO") {
 
@@ -1890,13 +1890,13 @@ function calculateTotals() {
 
         
 
-        // 終亁��時�入力可能にする��期間指定�ため��
+        // 終了時�入力可能にする期間指定のため
 
         if (endDatetimeInput) endDatetimeInput.readOnly = false;
 
         
 
-        // 備老��ベルを変更
+        // 備考ベルを変更
 
         const notesLabel = notesGroup ? notesGroup.querySelector('label') : null;
 
@@ -1904,7 +1904,7 @@ function calculateTotals() {
 
         
 
-        // 終亁��時が未入力なら開始時間�1時間後に設宁
+        // 終了時が未入力なら開始時間�1時間後に設定
 
         if (startDatetime && !endDatetimeInput.value) {
 
@@ -1934,7 +1934,7 @@ function calculateTotals() {
 
 
 
-        // 自動計算ロジック��
+        // 自動計算ロジック
 
         if (startDatetime && quantity > 0 && weight > 0 && efficiency > 0) {
 
@@ -1958,7 +1958,7 @@ function calculateTotals() {
 
 
 
-// スケジュールテ�ブル描画��chedule_numberを使用��
+// スケジュールテ�ブル描画chedule_numberを使用
 
 function renderScheduleTable() {
 
@@ -2000,7 +2000,7 @@ function renderScheduleTable() {
 
                 ${appMode === "admin" ? `
 
-                    <button class="btn btn-small btn-primary btn-edit" data-id="${schedule.id}">編雁/button>
+                    <button class="btn btn-small btn-primary btn-edit" data-id="${schedule.id}">編集</button>
 
                     <button class="btn btn-small btn-danger btn-delete" data-id="${schedule.id}">削除</button>
 
@@ -2014,11 +2014,11 @@ function renderScheduleTable() {
 
         
 
-        // 管琁����ード�み編雁�削除イベントを設宁
+        // 管理者モードのみ編集と削除イベントを設定
 
         if (appMode === "admin") {
 
-            tr.querySelector(".btn-edit").addEventListener("click", () => openditModal(schedule));
+            tr.querySelector(".btn-edit").addEventListener("click", () => openEditModal(schedule));
 
             tr.querySelector(".btn-delete").addEventListener("click", () => handleDeleteSchedule(schedule.id, schedule.product_name));
 
@@ -2030,15 +2030,15 @@ function renderScheduleTable() {
 
 
 
-// 編雁��ーダルを開ぁ
+// 編集モーダルを開く
 
-function openditModal(schedule) {
+function openEditModal(schedule) {
 
     const modal = document.getElementById("edit-modal");
 
     if (!modal) {
 
-        createditModal();
+        createEditModal();
 
     }
 
@@ -2066,7 +2066,7 @@ function openditModal(schedule) {
 
 
 
-// 日時をinput用にフォーマッテ
+// 日時をinput用にフォーマット
 
 function formatDateTimeForInput(dateStr) {
 
@@ -2084,9 +2084,9 @@ function formatDateTimeForInput(dateStr) {
 
 
 
-// 編雁��ーダルを作�
+// 編集モーダルを作成
 
-function createditModal() {
+function createEditModal() {
 
     const modal = document.createElement("div");
 
@@ -2100,7 +2100,7 @@ function createditModal() {
 
             <div class="modal-header">
 
-                <h2>📝 スケジュール編雁/h2>
+                <h2>📝 スケジュール編集</h2>
 
                 <button class="modal-close" id="edit-modal-close">&times;</button>
 
@@ -2122,7 +2122,7 @@ function createditModal() {
 
                     <div class="form-group">
 
-                        <label for="edit-start-datetime">開始日晁/label>
+                        <label for="edit-start-datetime">開始日時</label>
 
                         <input type="datetime-local" id="edit-start-datetime" required>
 
@@ -2130,7 +2130,7 @@ function createditModal() {
 
                     <div class="form-group">
 
-                        <label for="edit-end-datetime">終亁��晁/label>
+                        <label for="edit-end-datetime">終了日時</label>
 
                         <input type="datetime-local" id="edit-end-datetime">
 
@@ -2150,7 +2150,7 @@ function createditModal() {
 
                     <div class="form-group">
 
-                        <label for="edit-status">生産状況/label>
+                        <label for="edit-status">生産状況</label>
 
                         <select id="edit-status">
 
@@ -2158,7 +2158,7 @@ function createditModal() {
 
                             <option value="生産中">生産中</option>
 
-                            <option value="生産終亁>生産終亁/option>
+                            <option value="生産終了</option>
 
                         </select>
 
@@ -2168,15 +2168,15 @@ function createditModal() {
 
                 <div class="form-group">
 
-                    <label for="edit-notes">備老/label>
+                    <label for="edit-notes">備考</label>
 
-                    <input type="text" id="edit-notes" placeholder="備老��入劁>
+                    <input type="text" id="edit-notes" placeholder="備考を入力">
 
                 </div>
 
                 <div class="form-actions">
 
-                    <button type="submit" class="btn btn-primary">💾 保存/button>
+                    <button type="submit" class="btn btn-primary">💾 保存</button>
 
                     <button type="button" class="btn btn-secondary" id="edit-modal-cancel">キャンセル</button>
 
@@ -2192,21 +2192,21 @@ function createditModal() {
 
     
 
-    // イベントリスナ�を設宁
+    // イベントリスナーを設定
 
-    document.getElementById("edit-modal-close").addEventListener("click", closeditModal);
+    document.getElementById("edit-modal-close").addEventListener("click", closeEditModal);
 
-    document.getElementById("edit-modal-cancel").addEventListener("click", closeditModal);
+    document.getElementById("edit-modal-cancel").addEventListener("click", closeEditModal);
 
-    document.getElementById("edit-schedule-form").addEventListener("submit", handleditSchedule);
+    document.getElementById("edit-schedule-form").addEventListener("submit", handleEditSchedule);
 
 }
 
 
 
-// 編雁��ーダルを閉じる
+// 編集モーダルを閉じる
 
-function closeditModal() {
+function closeEditModal() {
 
     document.getElementById("edit-modal").classList.remove("active");
 
@@ -2214,9 +2214,9 @@ function closeditModal() {
 
 
 
-// 編雁��保存
+// 編集保存
 
-async function handleditSchedule(e) {
+async function handleEditSchedule(e) {
 
     e.preventDefault();
 
@@ -2246,7 +2246,7 @@ async function handleditSchedule(e) {
 
     try {
 
-        // datetime-localの値は "2026-02-02T08:00" 形弁
+        // datetime-localの値は "2026-02-02T08:00" 形式
 
         const formatDT = (dt) => {
 
@@ -2284,7 +2284,7 @@ async function handleditSchedule(e) {
 
             setStatus("スケジュールを更新しました");
 
-            closeditModal();
+            closeEditModal();
 
             await loadSchedules();
 
@@ -2292,7 +2292,7 @@ async function handleditSchedule(e) {
 
         } else {
 
-            setStatus("更新エラー: " + (response.error || "不�なエラー"), true);
+            setStatus("更新エラー: " + (response.error || "不明なエラー"), true);
 
         }
 
@@ -2375,7 +2375,7 @@ function renderGantt() {
 
 
 
-    for (let i = 0; i < 6; i++) { // 6日刁��示��前日、日後！
+    for (let i = 0; i < 6; i++) { // 6日切示前日、日後！
 
         const rowDate = new Date(startDate);
 
@@ -2467,7 +2467,7 @@ function renderGantt() {
 
 
 
-    // MMO/SHAPをオーバ�レイとして描画��xcel図形風��
+    // MMO/SHAPをオーバ�レイとして描画xcel図形風
 
     renderOverlayItems(container, startDate);
 
@@ -3014,7 +3014,7 @@ if (schedule.product_name === "MMO") {
 
           bar.classList.add("is-memo");
 
-          // xcel風スタイルを直接適用��枠なし�半透�・重なり可��
+          // xcel風スタイルを直接適用枠なし�半透�・重なり可
 
           bar.style.background = "rgba(255, 243, 128, 0.8)";
 
@@ -3026,7 +3026,7 @@ if (schedule.product_name === "MMO") {
 
           
 
-          // メモコンテ��
+          // メモコンテ
 
           const memoContent = document.createElement("div");
 
@@ -3150,7 +3150,7 @@ if (schedule.product_name === "MMO") {
 
           } catch (e) {}
 
-          // 色の設宁- xcel風��枠なし、半透�背景のみ��
+          // 色の設定- xcel風枠なし、半透�背景のみ
 
           const colorMap = {
 
@@ -3180,7 +3180,7 @@ if (schedule.product_name === "MMO") {
 
           
 
-          // 図形コンテ��
+          // 図形コンテ
 
           const shapeContent = document.createElement("div");
 
@@ -3340,7 +3340,7 @@ if (schedule.product_name === "MMO") {
 
 
 
-    // ステ�タスラベルを追加
+    // スデータスラベルを追加
 
     const statusSpan = document.createElement("span");
 
@@ -3376,7 +3376,7 @@ if (schedule.product_name === "MMO") {
 
 
 
-    // カスタムテ�ルチップイベント！MOの場合�スキテ���
+    // カスタムツールチップイベント！MOの場合�スキテ�
 
     if (schedule.product_name !== "MMO") {
 
@@ -3449,3 +3449,11 @@ function getSyncStatusText(status) {
 
 }
 }
+
+
+
+
+
+
+
+
