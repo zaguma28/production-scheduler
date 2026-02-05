@@ -1969,6 +1969,8 @@ function renderScheduleTable() {
 
 
     schedules.forEach(schedule => {
+        // メモ(MMO)と図形(SHAP)は一覧に表示しない
+        if (schedule.product_name === "MMO" || schedule.product_name === "SHAP") return;
 
         const tr = document.createElement("tr");
 
