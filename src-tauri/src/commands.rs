@@ -146,7 +146,7 @@ pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: 
             "product_name": { "value": request.product_name },
             "start_datetime": { "value": request.start_datetime },
             "end_datetime": { "value": request.end_datetime },
-            "生産數量": { "value": request.quantity1.map(|v| v.to_string()) },
+            "quantity": { "value": request.quantity1.map(|v| v.to_string()) },
             "status": { "value": request.production_status.clone().unwrap_or("未生産".to_string()) },
             "schedule_number": { "value": schedule_number.clone() },
             "製造備考": { "value": request.notes.clone().unwrap_or_default() },
@@ -451,130 +451,127 @@ fn get_number_value(record: &serde_json::Value, field: &str) -> Option<f64> {
 /// kintoneからスケジュールを取得して保存
 #[tauri::command]
 pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u32>, ()> {
-    let client_opt = {
-        let kintone = state.kintone_client.lock().unwrap();
-        kintone.clone()
+    
+    // Hardcoded migration source (App 351)
+    let migration_config = KintoneConfig {
+        subdomain: "jfe-rockfiber".to_string(),
+        app_id: 351,
+        api_token: "xZ85wdaTlqTnSpOxvaLEJrR8E5pCaJaX0jDcdpd7".to_string(),
+        memo_app_id: None,
+        memo_api_token: None,
     };
 
-    if let Some(client) = client_opt {
-        match client.get_records(None).await {
-            Ok(json) => {
-                let records = json["records"].as_array().cloned().unwrap_or_default();
+    eprintln!("=== MIGRATION START: Fetching from App 351 ===");
 
-                eprintln!("=== Processing {} records ===", records.len());
+    // 0. 既存データを全削除
+    {
+        let db = state.db.lock().unwrap();
+        eprintln!("=== Clearing local database before fetch ===");
+        if let Err(e) = db.delete_all_schedules() {
+            eprintln!("Failed to clear database: {}", e);
+            return Ok(ApiResponse { success: false, data: None, error: Some(e.to_string()) });
+        }
+    }
 
-                // 最初のレコードの全フィールドを出力
-                if let Some(first_record) = records.first() {
-                    eprintln!("=== First record fields ===");
-                    if let Some(obj) = first_record.as_object() {
-                        for (key, _) in obj.iter() {
-                            eprintln!("  Field: {}", key);
-                        }
-                    }
-                }
+    // 1. App 351から取得
+    let src_client = match KintoneClient::new(migration_config) {
+        Ok(c) => c,
+        Err(e) => return Ok(ApiResponse { success: false, data: None, error: Some(e.to_string()) }),
+    };
 
-                let mut count = 0;
-                let db = state.db.lock().unwrap();
+    let mut all_records = Vec::new();
 
-                for record in records {
-                    let kintone_id: u32 = get_string_value(&record, "$id").parse().unwrap_or(0);
-
-                    // スケジュール番号フィールドを取得
-                    let schedule_number = get_optional_string_value(&record, "schedule_number");
-
-                    // 製品名を取得（SINGLE_LINE_TEXT）
-                    let product_name = get_string_value(&record, "product_name");
-
-                    // 製品名が空なら品名を試す
-                    let product_name = if product_name.is_empty() {
-                        get_string_value(&record, "product_name")
-                    } else {
-                        product_name
-                    };
-
-                    if product_name.is_empty() {
-                        eprintln!("  Record {}: skipped (empty product name)", kintone_id);
-                        continue;
-                    }
-
-                    // 開始日時1 - DATETIME
-                    let start_datetime = get_string_value(&record, "start_datetime");
-
-                    // 総終了日時 - DATETIME
-                    let end_datetime = get_optional_string_value(&record, "end_datetime");
-
-                    // 生産状況 - DROP_DOWN (nullの場合がある)
-                    let production_status = get_string_value(&record, "status");
-                    let production_status = if production_status.is_empty() { "予定".to_string() } else { production_status };
-
-                    // 製造備考 - SINGLE_LINE_TEXT
-                    let notes = get_optional_string_value(&record, "製造備考");
-
-                    // 製綿能率 - DROP_DOWN
-                    let efficiency1 = get_optional_string_value(&record, "製綿能率");
-
-                    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
-                    let schedule = LocalSchedule {
-                        id: None,
-                        kintone_record_id: Some(kintone_id),
-                        schedule_number: schedule_number.clone(),
-                        product_name: product_name.clone(),
-                        line: "".to_string(), // kintoneから削除されたため空文字
-                        start_datetime,
-                        end_datetime,
-                        quantity1: get_number_value(&record, "生産数量"),
-                        quantity2: None,
-                        quantity3: None,
-                        quantity4: None,
-                        quantity5: None,
-                        quantity6: None,
-                        quantity7: None,
-                        quantity8: None,
-                        total_quantity: None,
-                        efficiency1: efficiency1.clone(),
-                        efficiency2: None,
-                        efficiency3: None,
-                        efficiency4: None,
-                        efficiency5: None,
-                        efficiency6: None,
-                        efficiency7: None,
-                        efficiency8: None,
-                        production_status,
-                        notes,
-                        sync_status: "synced".to_string(),
-                        created_at: now.clone(),
-                        updated_at: now,
-                    };
-
-                    if db.import_from_kintone(&schedule).is_ok() {
-                        count += 1;
-                        eprintln!("  Record {}: imported ({}) schedule_no={:?} efficiency1={:?}", kintone_id, product_name, schedule_number, efficiency1);
-                    }
-                }
-
-                eprintln!("=== Imported {} records ===", count);
-
-                Ok(ApiResponse {
-                    success: true,
-                    data: Some(count),
-                    error: None,
-                })
-            },
-            Err(e) => {
-                eprintln!("=== kintone API Error: {} ===", e);
-                Ok(ApiResponse {
-                    success: false,
-                    data: None,
-                    error: Some(e.to_string()),
-                })
+    // Limit to recent/active records if possible, but fetching all for now
+    match src_client.get_records(None, false).await {
+        Ok(json) => {
+            if let Some(records) = json["records"].as_array() {
+                eprintln!("=== App 351: Found {} records ===", records.len());
+                all_records.extend(records.clone());
             }
         }
-    } else {
+        Err(e) => {
+            eprintln!("App 351 fetch error: {}", e);
+            return Ok(ApiResponse { success: false, data: None, error: Some(e.to_string()) });
+        }
+    }
+
+    {
+        let records = all_records;
+        eprintln!("=== Processing {} records for migration ===", records.len());
+
+        let mut count = 0;
+        let db = state.db.lock().unwrap();
+
+        for (i, record) in records.iter().enumerate() {
+            if i % 10 == 0 {
+                eprintln!("Processing record {}/{}", i, records.len());
+            }
+            // Field mapping (Legacy 351 -> LocalSchedule)
+            
+            // Product Name: 製品名 (FS450K etc) or 製品名_アプリ
+            let mut product_name = get_string_value(&record, "製品名");
+            if product_name.is_empty() { product_name = get_string_value(&record, "製品名_アプリ"); }
+            if product_name.is_empty() { continue; } // Skip invalid
+
+            // Dates: 開始日時1, 総終了日時, 内終了日時1
+            let start_datetime = get_string_value(&record, "開始日時1");
+            
+            let mut end_datetime = get_optional_string_value(&record, "総終了日時");
+            if end_datetime.is_none() { end_datetime = get_optional_string_value(&record, "内終了日時1"); }
+
+            // Status: 生産状況 (未生産 etc)
+            let mut status = get_string_value(&record, "生産状況");
+            if status.is_empty() { status = "未生産".to_string(); }
+
+            // Quantity: 総個数 or 生産数量1
+            let qty_val = get_number_value(&record, "総個数")
+                .or(get_number_value(&record, "生産数量1"));
+            
+            // Notes: 製造備考 or 特記事項
+            let mut notes = get_optional_string_value(&record, "製造備考");
+            if notes.is_none() { notes = get_optional_string_value(&record, "特記事項"); }
+
+            // Efficiency: 製綿能率1
+            let efficiency = get_optional_string_value(&record, "製綿能率1");
+
+            // Schedule Number: スケジュール番号
+            let schedule_number = get_optional_string_value(&record, "スケジュール番号");
+
+            let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+            let schedule = LocalSchedule {
+                id: None,
+                kintone_record_id: None, // Reset ID for migration (New record for 506)
+                schedule_number: schedule_number,
+                product_name: product_name.clone(),
+                line: "".to_string(),
+                start_datetime: start_datetime,
+                end_datetime: end_datetime,
+                quantity1: qty_val,
+                quantity2: None, quantity3: None, quantity4: None, 
+                quantity5: None, quantity6: None, quantity7: None, quantity8: None,
+                total_quantity: None,
+                efficiency1: efficiency,
+                efficiency2: None, efficiency3: None, efficiency4: None,
+                efficiency5: None, efficiency6: None, efficiency7: None, efficiency8: None,
+                production_status: status,
+                notes: notes,
+                sync_status: "pending".to_string(), // Mark as pending to sync to 506
+                created_at: now.clone(),
+                updated_at: now,
+            };
+
+            // Don't use import_from_kintone (it checks kintone_id), use add_schedule directly
+            if let Ok(_) = db.add_schedule(&schedule) {
+                count += 1;
+            }
+        }
+        
+        eprintln!("=== Migrated {} records ===", count);
         Ok(ApiResponse {
-            success: false,
-            data: None,
-            error: Some("kintone設定が未設定です".to_string()),
+            success: true,
+            data: Some(count),
+            error: None,
         })
     }
 }
@@ -611,7 +608,7 @@ pub async fn sync_to_kintone(state: State<'_, AppState>) -> Result<ApiResponse<u
                     "product_name": { "value": schedule.product_name },
                     "start_datetime": { "value": schedule.start_datetime },
                     "end_datetime": { "value": schedule.end_datetime },
-                    "生産数量": { "value": schedule.quantity1.map(|v| v.to_string()) },
+                    "quantity": { "value": schedule.quantity1.map(|v| v.to_string()) },
                     "status": { "value": schedule.production_status.clone() },
                     "製造備考": { "value": schedule.notes.clone().unwrap_or_default() },
                     "製綿能率": { "value": schedule.efficiency1.clone().unwrap_or_default() },

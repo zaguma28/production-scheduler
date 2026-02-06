@@ -239,6 +239,7 @@ body {
     top: 0;
     z-index: 50;
     border-bottom: 1px solid var(--border-color);
+    width: fit-content; /* 中身の幅に合わせる */
     min-width: 1640px;
 }
 
@@ -252,12 +253,13 @@ body {
 }
 
 .gantt-rows {
+    width: fit-content; /* 中身の幅に合わせる */
     min-width: 1640px;
 }
 
 .gantt-row {
     display: flex;
-    border-bottom: 1px solid var(--system-gray6);
+    border-bottom: 1px solid #000; /* 日付境界線をさらに濃く（黒）変更 */
     min-height: 130px;
     position: relative;
     transition: background-color 0.2s;
@@ -287,15 +289,22 @@ body {
 }
 
 .gantt-row-content {
-    flex: 1;
     position: relative;
-    background: repeating-linear-gradient(
+    /* 25h * 60px = 1500px にして、ヘッダー(6:00〜翌6:00)と合わせる */
+    width: 1500px; 
+    flex-shrink: 0;
+    min-height: 100%;
+    
+    /* 1時間 = 60px */
+    background-image: repeating-linear-gradient(
         90deg,
         transparent,
         transparent 59px,
         #F5F5F7 59px,
         #F5F5F7 60px
     );
+     background-size: 60px 100%;
+     border-left: 1px solid rgba(0,0,0,0.05);
 }
 
 /* ガントバー */
@@ -303,7 +312,7 @@ body {
     position: absolute;
     height: 110px;
     border-radius: 14px; 
-    color: white;
+    color: var(--text-primary); /* 黒文字に変更 */
     font-size: 14px;
     display: flex;
     flex-direction: column;
@@ -327,6 +336,21 @@ body {
 .gantt-bar:active {
     cursor: grabbing;
     transform: scale(0.98);
+}
+
+/* 分割バー（日付またぎ）のスタイル */
+.gantt-bar.split-start {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none; /* 境界線なしで連続性を表現 */
+    margin-left: -1px; /* 隙間埋め */
+}
+
+.gantt-bar.split-end {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+    margin-right: -1px;
 }
 
 /* ドラッグ中のゴースト */
@@ -402,16 +426,21 @@ body {
 }
 
 /* ステータスカラー adjustments for better contrast/modern look */
+/* ステータスカラー adjustments for better contrast with black text */
 .gantt-bar.status-pending {
-    background: linear-gradient(135deg, #FF9F0A, #FFB340); /* System Orange */
+    background: linear-gradient(135deg, #FFD699, #FFCC80); /* Pastel Orange */
+    border: 1px solid #FFB74D;
 }
 
 .gantt-bar.status-inprogress {
-    background: linear-gradient(135deg, #007AFF, #5AC8FA); /* System Blue */
+    background: linear-gradient(135deg, #A6D6FF, #90CAF9); /* Pastel Blue */
+    border: 1px solid #64B5F6;
 }
 
 .gantt-bar.status-completed {
-    background: linear-gradient(135deg, #8E8E93, #AEAEB2); /* System Gray */
+    background: linear-gradient(135deg, #E0E0E0, #D6D6D6); /* Pastel Gray */
+    border: 1px solid #BDBDBD;
+    opacity: 0.8;
 }
 
 /* テーブル view container needs card styling */

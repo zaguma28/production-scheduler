@@ -29,8 +29,10 @@ fn load_kintone_config() -> KintoneConfig {
     eprintln!("デフォルト設定を使用します");
     KintoneConfig {
         subdomain: "jfe-rockfiber".to_string(),
-        app_id: 351,
-        api_token: "xZ85wdaTlqTnSpOxvaLEJrR8E5pCaJaX0jDcdpd7".to_string(),
+        app_id: 506,
+        api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo".to_string(),
+        memo_app_id: Some(507),
+        memo_api_token: Some("hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL".to_string()),
     }
 }
 

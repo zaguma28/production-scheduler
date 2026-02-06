@@ -155,6 +155,14 @@
                             <label for="quantity1">個数</label>
                             <input type="number" id="quantity1" min="0" placeholder="生産個数を入力">
                         </div>
+                        <div class="form-group">
+                            <label for="initial-status">初期ステータス（テスト用）</label>
+                            <select id="initial-status">
+                                <option value="未生産">未生産</option>
+                                <option value="生産中">生産中</option>
+                                <option value="生産終了">生産終了</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -189,7 +197,12 @@
                             <input type="text" id="notes" placeholder="備考を入力">
                         </div>
                     </div>
-                    <div class="form-actions">
+                    <div class="form-actions" style="display: flex; align-items: center; gap: 16px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="go-to-list-after-add">
+                            <span>登録後に一覧へ移動</span>
+                        </label>
+                        <div style="flex: 1;"></div>
                         <button type="submit" class="btn btn-primary btn-large">
                             ✅ スケジュールを追加
                         </button>

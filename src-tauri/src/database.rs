@@ -350,6 +350,14 @@ impl Database {
         Ok(())
     }
 
+    /// すべてのスケジュールを削除（全消去）
+    pub fn delete_all_schedules(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM schedules", [])?;
+        // IDの自動インクリメントをリセットしたい場合は以下も実行（任意）
+        // self.conn.execute("DELETE FROM sqlite_sequence WHERE name='schedules'", [])?;
+        Ok(())
+    }
+
     /// 製品の重量を取得
     pub fn get_product_weight(&self, product_name: &str) -> Result<Option<f64>> {
         let mut stmt = self.conn.prepare(

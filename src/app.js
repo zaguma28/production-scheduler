@@ -95,9 +95,9 @@ function initMemoModal() {
 
         e.preventDefault();
 
-        // 現在時刻を使用（日時選択はなし）
-        const startDate = new Date();
-        const duration = 2; // デフォルト2時間
+        // コンテキストメニューでクリックされた日時があればそれを使用、なければ現在時刻
+        const startDate = contextClickedTime ? new Date(contextClickedTime) : new Date();
+        const duration = 4; // デフォルト4時間 (二回り大きく)
 
         const text = document.getElementById("memo-text").value;
 
@@ -110,13 +110,7 @@ function initMemoModal() {
 
 
 
-        const formatIso = (d) => {
-
-            const pad = (n) => n.toString().padStart(2, '0');
-
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-        };
+        const formatIso = (d) => d.toISOString();
 
 
 
@@ -176,7 +170,7 @@ function initMemoModal() {
 
     // コンテキストメニュー用の変数
 
-    let contextClickedTime = null;
+    // let contextClickedTime = null; // Removed: Now global
 
     const contextMenu = document.getElementById("context-menu");
 
@@ -314,9 +308,9 @@ function initShapeModal() {
 
         e.preventDefault();
 
-        // 現在時刻を使用（日時選択はなし）
-        const startDate = new Date();
-        const duration = 2; // デフォルト2時間
+        // コンテキストメニューでクリックされた日時があればそれを使用、なければ現在時刻
+        const startDate = contextClickedTime ? new Date(contextClickedTime) : new Date();
+        const duration = 4; // デフォルト4時間 (二回り大きく)
 
         const shapeType = document.getElementById("shape-type").value;
 
@@ -329,13 +323,7 @@ function initShapeModal() {
 
 
 
-        const formatIso = (d) => {
-
-            const pad = (n) => n.toString().padStart(2, '0');
-
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-        };
+        const formatIso = (d) => d.toISOString();
 
 
 
@@ -529,7 +517,7 @@ async function initKintoneConfig() {
 
         app_id: 506,
 
-        api_token: "3CakeA8SORFDrOawAcL3Y2UY8TogZkLw52U5RBo",
+        api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo",
 
         memo_app_id: 507,
 
@@ -925,11 +913,8 @@ async function handleCopyPrevShapes() {
                 newEnd.setDate(targetDate.getDate());
             }
 
-            //フォーマット関数 (YYYY-MM-DD HH:mm:ss)
-            const fmt = (d) => {
-                const pad = n => n.toString().padStart(2,'0');
-                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-            };
+            //フォーマット関数 (ISO 8601)
+            const fmt = (d) => d.toISOString();
 
             const request = {
                 product_name: item.product_name,
@@ -1616,6 +1601,29 @@ async function handleGlobalMouseUp(e) {
 
         const newEnd = new Date(newStart.getTime() + durationMs);
 
+        // Memo/Shape specific logic: Reset Y offset if moving to a new row to prevents vertical jumping
+        if (schedule.product_name === 'MMO' || schedule.product_name === 'SHAP') {
+            try {
+                let parsed = JSON.parse(schedule.notes || '{}');
+                if (parsed.x !== undefined) {
+                     // Update internal X to match new time (optional, but good for consistency)
+                     // But critical: Reset Y if it was an absolute offset that is now wrong
+                     // However, the main render logic calculates topPx = rowTop + pixelPos.y
+                     // If we moved rows, pixelPos.y should be small (relative to row).
+                     // If it was large, it stays large. 
+                     // Let's reset it to a default '10' if we detected a date change?
+                     // For now, simpler to just let the update_schedule handle the date change.
+                     // But we should probably clear the 'y' from notes if we can, or update it.
+                     // IMPORTANT: The update_schedule below updates start/end time.
+                     // It does NOT update 'notes' (where x/y are stored).
+                     // We need to ALSO update notes with new X/y?
+                     // Actually, if we just update the date, the renderOverlayItems uses the date to find the row.
+                     // And uses pixelPos.y from notes.
+                     // If pixelPos.y was 10, it renders at 10px from top of New Row. Correct.
+                }
+            } catch(e) {}
+        }
+
 
 
         try {
@@ -1820,7 +1828,7 @@ async function handleAddSchedule(e) {
 
         total_quantity: quantity,
 
-        production_status: "未生産",
+        production_status: document.getElementById("initial-status").value || "未生産",
 
         notes: document.getElementById("notes").value || null,
         efficiency: document.getElementById("efficiency").value || null
@@ -1836,11 +1844,25 @@ async function handleAddSchedule(e) {
 
             setStatus("スケジュールを追加しました");
 
+            // 次の入力のために終了時間を保持
+            const nextStartTime = document.getElementById("end-datetime").value;
+            // 遷移するかどうかを保持（リセット前に取得）
+            const goToList = document.getElementById("go-to-list-after-add").checked;
+
             elements.addForm.reset();
+
+            // 保持した終了時間を次の開始時間にセット
+            if (nextStartTime) {
+                document.getElementById("start-datetime").value = nextStartTime;
+                // 自動計算をトリガーするために日付変更イベントを発火したほうが親切かもだが、とりあえず値セットのみ
+            }
 
             await loadSchedules();
 
-            switchTab("schedule");
+            // チェックボックスの状態を確認して遷移
+            if (goToList) {
+                switchTab("schedule");
+            }
 
         } else {
 
@@ -1985,6 +2007,8 @@ function renderScheduleTable() {
 
 
     schedules.forEach(schedule => {
+        // MMOとSHAPは一覧に表示しない
+        if (schedule.product_name === "MMO" || schedule.product_name === "SHAP") return;
 
         const tr = document.createElement("tr");
 
@@ -2371,13 +2395,17 @@ function renderGantt() {
 
 
 
-    timeline.innerHTML = '<div style="width:100px;padding:10px;font-weight:bold;">日仁/div>';
+    // 時間軸とグリッドの幅を一致させる (label 140px + 25時間 * 60px = 1640px)
+    // タイムラインのスタイル調整
+    timeline.style.minWidth = `${140 + 25 * 60}px`;
+    
+    timeline.innerHTML = '<div style="width:140px;padding:10px;font-weight:bold;flex-shrink:0;">日付</div>';
 
-    for (let h = 6; h < 30; h++) {
+    for (let h = 6; h <= 30; h++) {
 
         const hour = h % 24;
 
-        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);">${hour}:00</div>`;
+        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);flex-shrink:0;">${hour}:00</div>`;
 
     }
 
@@ -2401,7 +2429,8 @@ function renderGantt() {
 
         const dateStr = formatIsoDate(rowDate);
 
-        const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()}`;
+        const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][rowDate.getDay()];
+        const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()} (${dayOfWeek})`;
 
 
 
@@ -2443,17 +2472,23 @@ function renderGantt() {
 
 
 
-        // MMO/SHAPを除夁
+        const rowEnd = new Date(rowStart);
+        rowEnd.setDate(rowEnd.getDate() + 1); // 翌日6:00
 
+        // MMO/SHAPを除外
         const daySchedules = schedules.filter(s => {
 
             if (s.product_name === "MMO" || s.product_name === "SHAP") return false;
 
             if (!s.start_datetime) return false;
 
-            const sTime = new Date(s.start_datetime);
+            const sStart = new Date(s.start_datetime);
+            // 終了日時がない場合はデフォルト1時間として扱う（表示ロジックに合わせる）
+            const sEnd = s.end_datetime ? new Date(s.end_datetime) : new Date(sStart.getTime() + 60*60*1000);
 
-            return getProductionDateStr(sTime) === dateStr;
+            // 行の期間（rowStart ~ rowEnd）と重複しているかチェック
+            // Start < RowEnd AND End > RowStart
+            return sStart < rowEnd && sEnd > rowStart;
 
         });
 
@@ -2473,7 +2508,9 @@ function renderGantt() {
 
                 const bar = createGanttBar(schedule, rowStart, laneIndex);
 
-                contentDiv.appendChild(bar);
+                if (bar) {
+                    contentDiv.appendChild(bar);
+                }
 
             });
 
@@ -2520,84 +2557,126 @@ function renderOverlayItems(container, startDate) {
     overlayItems.forEach(item => {
         if (!item.start_datetime) return;
 
-        // 日付チェック：表示中の日付（startDate）と一致するものだけ表示
-        const itemDate = new Date(item.start_datetime);
-        const viewDate = new Date(startDate);
+        // 文字列の日付を取得
+        const itemStart = new Date(item.start_datetime);
+        const itemDateStr = getProductionDateStr(itemStart);
         
-        // 年月日が一致するか確認（時間は無視）
-        if (itemDate.getFullYear() !== viewDate.getFullYear() ||
-            itemDate.getMonth() !== viewDate.getMonth() ||
-            itemDate.getDate() !== viewDate.getDate()) {
-            return;
-        }
+        // その日付の行（row）を探す
+        const rowElement = container.querySelector(`.gantt-row[data-date="${itemDateStr}"]`);
+        
+        // 行が存在しなければ（画面外ならば）表示しない
+        if (!rowElement) return;
+
+        // 行の位置基準
+        const rowTop = rowElement.offsetTop;
 
         // ピクセル位置をnotesから取得（存在すれば）
         let pixelPos = null;
         let notesData = item.notes || '';
         if (item.product_name === 'MMO') {
-            // MMOのnotesはテキストまたは{text, x, y, scale}形式
             try {
                 const parsed = JSON.parse(notesData);
-                if (parsed.x !== undefined && parsed.y !== undefined) {
-                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                if (parsed.x !== undefined) {
+                     // Y座標は無視してrowTop基準にする（日付ズレ防止）
+                    pixelPos = { x: parsed.x, y: 10, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
                     notesData = parsed.text || '';
                 }
             } catch(e) { /* テキスト形式 */ }
         } else if (item.product_name === 'SHAP') {
-            // SHAPのnotesは{type, color, text, x, y, scale}形式
             try {
                 const parsed = JSON.parse(notesData);
-                if (parsed.x !== undefined && parsed.y !== undefined) {
-                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                if (parsed.x !== undefined) {
+                    pixelPos = { x: parsed.x, y: 10, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
                 }
             } catch(e) {}
         }
 
         let leftPx, topPx, widthPx, heightPx;
         
+        // Debug logging
+        // console.log(`Item ${item.id} (${item.product_name}): pixelPos=`, pixelPos);
+        
         if (pixelPos) {
-            // ピクセル位置とサイズが保存されていればそれを使用
+            // 保存されたX位置を使用
             leftPx = pixelPos.x;
-            topPx = pixelPos.y;
-            widthPx = pixelPos.w || 120;
-            heightPx = pixelPos.h || 80;
+            // Y位置は行基準に強制
+            topPx = rowTop + (pixelPos.y || 10);
+            widthPx = pixelPos.w || 240; // Default width 240
+            heightPx = pixelPos.h || 120; // Default height 120
         } else {
             // 保存されていなければ日時から計算
-            const itemStart = new Date(item.start_datetime);
-            const itemDateStr = getProductionDateStr(itemStart);
-            const rowlement = container.querySelector('[data-date="' + itemDateStr + '"]');
-            if (!rowlement) return;
+            if (itemStart.getHours() < 6) itemStart.setDate(itemStart.getDate() - 1);
             
-            const rowTop = rowlement.offsetTop;
             const dayStart = new Date(itemStart);
             dayStart.setHours(6, 0, 0, 0);
-            if (itemStart.getHours() < 6) dayStart.setDate(dayStart.getDate() - 1);
-            const msFrom6AM = itemStart.getTime() - dayStart.getTime();
-            leftPx = 100 + (msFrom6AM / (60 * 60 * 1000)) * 60;
-            topPx = rowTop + 10;
             
-            // デフォルトサイズ
-            const itemStart2 = new Date(item.start_datetime);
-            const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart2.getTime() + 2*60*60*1000);
-            const durationMs = itemnd.getTime() - itemStart2.getTime();
-            widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60);
-            heightPx = 80;
+    // 行の範囲内（当日6:00〜翌6:00）にクランプする
+    const rowStartMs = dayStart.getTime(); // Assuming dayStart here is the 6AM start of the row
+    const rowEndMs = rowStartMs + 24 * 60 * 60 * 1000;
+
+    const itemStartRaw = new Date(item.start_datetime); // Changed from schedule to item
+    const itemEndRaw = item.end_datetime 
+        ? new Date(item.end_datetime) 
+        : new Date(itemStartRaw.getTime() + 60*60*1000); // endがなければとりあえず1時間
+
+    // クランプ処理
+    const clampStart = itemStartRaw.getTime() < rowStartMs ? new Date(rowStartMs) : itemStartRaw;
+    const clampEnd = itemEndRaw.getTime() > rowEndMs ? new Date(rowEndMs) : itemEndRaw;
+
+    const msFrom6AM = clampStart.getTime() - rowStartMs; 
+    // cssの.gantt-row-label width: 140pxに合わせてオフセットを調整
+    leftPx = 140 + (msFrom6AM / (60 * 60 * 1000)) * 60;
+    topPx = rowTop + 10; // This was already calculated as rowTop + 10
+    
+    const durationMs = clampEnd.getTime() - clampStart.getTime();
+    widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60); // 念のためmax(0)
+    heightPx = 120; // Default height increased
+        }
+        
+        const itemEnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart.getTime() + 2*60*60*1000);
+
+    // Force min sizes if they are small (catch old defaults 120x80 or similar)
+    // New default target: 240x120
+    if (!pixelPos || (widthPx > 0 && widthPx < 200)) {
+        // console.log(`Resizing Item ${item.id} from ${widthPx} to 240`);
+        widthPx = 240;
+    }
+    if (!pixelPos || (heightPx > 0 && heightPx < 100)) {
+         heightPx = 120;
+    }
+
+    const iteml = document.createElement('div');
+    
+    // VISUAL DEBUG: Add a red border to indicate this rendered via relevant code
+    // iteml.style.border = '2px solid red';
+
+        // Debug logging for drag
+        if (appMode !== 'worker') {
+             iteml.addEventListener('mousedown', (e) => {
+                 console.log('MouseDown on item:', item.id);
+             });
         }
 
-        const itemStart = new Date(item.start_datetime);
-        const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart.getTime() + 2*60*60*1000);
+        // Center content and add transition for hover effect
+        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + topPx + 'px;width:' + widthPx + 'px;height:' + heightPx + 'px;pointer-events:auto;cursor:move;padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1001;background:rgba(255,255,255,0.1);border:1px solid rgba(0,0,0,0.2);border-radius:8px;overflow:visible;box-sizing:border-box;transform-origin:top left;transition:border-color 0.2s, box-shadow 0.2s, background-color 0.2s;';
+        
+        iteml.addEventListener('mouseenter', () => {
+             iteml.style.borderColor = 'rgba(0,122,255,0.8)';
+             iteml.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+        });
+        iteml.addEventListener('mouseleave', () => {
+             iteml.style.borderColor = 'rgba(0,0,0,0.2)';
+             iteml.style.boxShadow = 'none';
+        });
 
-        const iteml = document.createElement('div');
-
-        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + topPx + 'px;width:' + widthPx + 'px;height:' + heightPx + 'px;pointer-events:auto;cursor:move;padding:10px;display:flex;align-items:flex-start;justify-content:space-between;z-index:1001;background:transparent;border:none;border-radius:4px;overflow:visible;box-sizing:border-box;transform-origin:top left;';
-
-        // 保存されたスケール値を適用
-        if (pixelPos && pixelPos.scale && pixelPos.scale !== 1.0) {
-            iteml.style.transform = `scale(${pixelPos.scale})`;
-        }
+    // Drag logic for overlay items
+    // TODO: Implement logic to update start_datetime when dropped on a different row
+    if (pixelPos && pixelPos.scale && pixelPos.scale !== 1.0) {
+        iteml.style.transform = `scale(${pixelPos.scale})`;
+    }
 
         if (item.product_name === 'MMO') {
-
+            // ... (Memo content generation - no changes needed, it appends to iteml)
             // 背景色はcssTextで設定済み（リサイズ確認用）
 
             // メモテキストをnotesDataから取得（JSON形式の場合はtextプロパティ）
@@ -2613,8 +2692,7 @@ function renderOverlayItems(container, startDate) {
 
             const textSpan = document.createElement('span');
 
-            textSpan.style.cssText = 'color:#333;font-size:14px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;cursor:text;';
-
+            textSpan.style.cssText = 'color:#333;font-size:22px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;cursor:text;text-align:center;width:100%;display:flex;align-items:center;justify-content:center;';
             textSpan.textContent = memoText;
 
             iteml.appendChild(textSpan);
@@ -2628,6 +2706,7 @@ function renderOverlayItems(container, startDate) {
                 input.style.cssText = 'width:100%;height:100%;border:1px solid #007AFF;border-radius:4px;padding:4px;font-size:14px;resize:none;outline:none;';
                 textSpan.style.display = 'none';
                 iteml.insertBefore(input, textSpan);
+                input.addEventListener('mousedown', (e) => e.stopPropagation());
                 input.focus();
                 input.select();
                 
@@ -2682,9 +2761,9 @@ function renderOverlayItems(container, startDate) {
 
             const contentSpan = document.createElement('span');
 
-            contentSpan.style.cssText = 'font-size:28px;display:flex;align-items:center;gap:8px;flex:1;';
+            contentSpan.style.cssText = 'font-size:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0px;flex:1;line-height:1;width:100%;';
 
-            contentSpan.innerHTML = icon + ' <span style="font-size:14px;font-weight:600;color:#333">' + (shapeInfo.text || '') + '</span>';
+            contentSpan.innerHTML = icon + ' <span style="font-size:22px;font-weight:600;color:#333;margin-top:4px;">' + (shapeInfo.text || '') + '</span>';
 
             iteml.appendChild(contentSpan);
 
@@ -2708,8 +2787,10 @@ function renderOverlayItems(container, startDate) {
         if (appMode !== 'worker') {
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
-            resizeHandle.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;background:rgba(0,122,255,0.5);border-radius:0 0 4px 0;pointer-events:auto;z-index:10;';
-            resizeHandle.innerHTML = '⤡';
+            // Round circle handle, distinct look
+            resizeHandle.style.cssText = 'position:absolute;right:-8px;bottom:-8px;width:24px;height:24px;cursor:se-resize;background:#007AFF;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2);pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;';
+            resizeHandle.innerHTML = '⤡'; // Icon inside circle
+
             resizeHandle.style.fontSize = '12px';
             resizeHandle.style.display = 'flex';
             resizeHandle.style.alignItems = 'center';
@@ -2804,10 +2885,11 @@ function renderOverlayItems(container, startDate) {
             const origLeft = parseInt(iteml.style.left) || 0;
             const origTop = parseInt(iteml.style.top) || 0;
             const itemId = item.id;
-            const duration = itemnd.getTime() - itemStart.getTime();
+            const duration = itemEnd.getTime() - itemStart.getTime();
             
             iteml.style.cursor = 'grabbing';
             iteml.style.zIndex = '2000';
+            e.stopPropagation();
             e.preventDefault();
 
             function onMouseMove(ev) {
@@ -2967,61 +3049,63 @@ function calculateLanes(schedules) {
 function createGanttBar(schedule, dayStart6AM, laneIndex) {
 
     const bar = document.createElement("div");
-
     bar.className = "gantt-bar";
-
     bar.dataset.id = schedule.id;
 
+    // 行の範囲（当日6:00〜翌6:00）
+    const rowStartMs = dayStart6AM.getTime();
+    const rowEndMs = rowStartMs + 24 * 60 * 60 * 1000;
 
+    // スケジュールの本来の開始・終了日時
+    const itemStartRaw = new Date(schedule.start_datetime);
+    const itemEndRaw = schedule.end_datetime 
+        ? new Date(schedule.end_datetime) 
+        : new Date(itemStartRaw.getTime() + 60*60*1000);
 
-    const startTime = new Date(schedule.start_datetime);
+    // クランプ処理（行の範囲内に収める）
+    const clampStart = itemStartRaw.getTime() < rowStartMs ? new Date(rowStartMs) : itemStartRaw;
+    const clampEnd = itemEndRaw.getTime() > rowEndMs ? new Date(rowEndMs) : itemEndRaw;
 
-    const endTime = schedule.end_datetime ? new Date(schedule.end_datetime) : new Date(startTime.getTime() + 60*60*1000);
+    // 開始位置の計算 (6:00基準)
+    const msFrom6AM = clampStart.getTime() - rowStartMs; 
+    // .gantt-row-contentはlabel(140px)の後に配置されるため、内部座標0が6:00と一致する
+    // したがってオフセット140は不要
+    const leftPx = (msFrom6AM / (60 * 60 * 1000)) * 60;
+    
+    // 幅の計算
+    const durationMs = clampEnd.getTime() - clampStart.getTime();
+    const widthPx = Math.max(0, (durationMs / (60 * 60 * 1000)) * 60);
 
+    // 幅が0以下（表示不能）の場合は描画しない
+    if (widthPx <= 0) return null;
 
+    // 高さ・垂直位置の計算
+    const topPx = 10 + (laneIndex * 120);
 
-    const diffMs = startTime.getTime() - dayStart6AM.getTime();
-
-    const startMinutes = diffMs / (1000 * 60);
-
-
-
-    const durationMs = endTime.getTime() - startTime.getTime();
-
-    const durationMinutes = durationMs / (1000 * 60);
-
-
-
-    const left = (startMinutes / 60) * 60;
-
-    const width = Math.max((durationMinutes / 60) * 60, 60);
-
-    const top = 10 + laneIndex * 120;
-
-
-
-    bar.style.left = left + "px";
-
-    bar.style.width = width + "px";
-
-    bar.style.top = top + "px";
-
+    bar.style.left = `${leftPx}px`;
+    bar.style.width = `${widthPx}px`;
+    bar.style.top = `${topPx}px`;
     bar.style.height = '110px';
 
 
 
+    // 分割バーのスタイル適用
+    // 前日から続いている（開始時刻がクランプされている）
+    if (itemStartRaw.getTime() < rowStartMs) {
+        bar.classList.add("split-start"); // 左側を直角に
+    }
+    // 翌日に続く（終了時刻がクランプされている）
+    if (itemEndRaw.getTime() > rowEndMs) {
+        bar.classList.add("split-end"); // 右側を直角に
+    }
+
+    // ステータスに応じたクラス適用（分割判定とは独立させる）
     if (schedule.production_status === "生産終了") {
-
         bar.classList.add("status-completed");
-
     } else if (schedule.production_status === "生産中") {
-
         bar.classList.add("status-inprogress");
-
     } else {
-
         bar.classList.add("status-pending");
-
     }
 
 
@@ -3316,40 +3400,40 @@ if (schedule.product_name === "MMO") {
 
           // schedule_numberを優先、なければkintone_record_id
 
+          // schedule_numberを優先、なければkintone_record_id
+          // schedule_numberを優先、なければkintone_record_id
           const schedNo = schedule.schedule_number || schedule.kintone_record_id || "";
 
+          // 1. 製品名 (個数)
+          const qty = schedule.total_quantity || schedule.quantity1;
           const productSpan = document.createElement("span");
-
           productSpan.className = "bar-product";
-
-          productSpan.textContent = schedNo ? `[${schedNo}] ${schedule.product_name}` : schedule.product_name;
-
+          productSpan.style.fontWeight = "normal"; // 製品名は通常（指示なしだがバランス的に）
+          productSpan.textContent = qty ? `${schedule.product_name} (${qty})` : schedule.product_name;
           bar.appendChild(productSpan);
 
-          // 製造備考の表示
-          if (schedule.remarks) {
-              const remarksSpan = document.createElement("span");
-              remarksSpan.className = "bar-notes"; // bar-notesクラスを流用
-              remarksSpan.style.fontSize = "12px";
-              remarksSpan.style.marginTop = "2px";
-              remarksSpan.textContent = schedule.remarks;
-              bar.appendChild(remarksSpan);
+          // 2. 備考 (notes) ← 太字
+          const notes = schedule.notes;
+          if (notes) {
+              const notesSpan = document.createElement("span");
+              notesSpan.className = "bar-notes";
+              notesSpan.style.fontSize = "17px"; // 製品名(17px)に合わせる
+              notesSpan.style.fontWeight = "bold"; // 太字
+              notesSpan.style.marginTop = "2px";
+              notesSpan.style.overflow = "hidden";
+              notesSpan.style.textOverflow = "ellipsis";
+              notesSpan.textContent = notes;
+              bar.appendChild(notesSpan);
           }
 
-
-
-          const qty = schedule.total_quantity || schedule.quantity1;
-
-          if (qty) {
-
-              const qtySpan = document.createElement("span");
-
-              qtySpan.className = "bar-quantity";
-
-              qtySpan.textContent = `${qty}個`;
-
-              bar.appendChild(qtySpan);
-
+          // 3. スケジュール番号 ← 小さく
+          if (schedNo) {
+              const noSpan = document.createElement("span");
+              noSpan.style.fontSize = "9px"; // より小さく
+              noSpan.style.opacity = "0.7";
+              noSpan.style.marginTop = "4px"; // autoをやめて固定マージンに
+              noSpan.textContent = schedNo;
+              bar.appendChild(noSpan);
           }
 
     }
@@ -3357,13 +3441,11 @@ if (schedule.product_name === "MMO") {
 
 
     // スデータスラベルを追加
-
+    // 不要なので削除（バーの色で状態を表すため）
+    /*
     const statusSpan = document.createElement("span");
-
     statusSpan.className = "bar-status";
-
     const statusText = schedule.production_status || "未生産";
-
     const statusMap = {
         "予定": "未生産",
         "未生産": "未生産",
@@ -3371,24 +3453,11 @@ if (schedule.product_name === "MMO") {
         "生産終了": "生産終了",
         "完了": "生産終了"
     };
-
-    statusSpan.textContent = `、{statusMap[statusText] || statusText}】`;
-
+    statusSpan.textContent = `【${statusMap[statusText] || statusText}】`;
     bar.appendChild(statusSpan);
+    */
 
-
-
-    if (schedule.notes) {
-
-        const notesSpan = document.createElement("span");
-
-        notesSpan.className = "bar-notes";
-
-        notesSpan.textContent = schedule.notes;
-
-        bar.appendChild(notesSpan);
-
-    }
+    // 重複していたnotes追加ブロックを削除
 
 
 

@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 
 /// kintone接続設定
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+
 pub struct KintoneConfig {
     pub subdomain: String,
     pub app_id: u32,
@@ -71,11 +71,12 @@ impl KintoneClient {
     }
 
     /// レコードを取得
-    pub async fn get_records(&self, query: Option<&str>) -> Result<serde_json::Value> {
+    pub async fn get_records(&self, query: Option<&str>, is_memo: bool) -> Result<serde_json::Value> {
         let url = format!("{}/records.json", self.base_url());
+        let (app_id, api_token) = self.get_app_credentials(is_memo);
 
         let mut params = vec![
-            ("app", self.config.app_id.to_string()),
+            ("app", app_id.to_string()),
         ];
 
         if let Some(q) = query {
@@ -84,7 +85,7 @@ impl KintoneClient {
 
         let response = self.client
             .get(&url)
-            .header("X-Cybozu-API-Token", &self.config.api_token)
+            .header("X-Cybozu-API-Token", &api_token)
             .query(&params)
             .send()
             .await?;
