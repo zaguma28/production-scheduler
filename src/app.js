@@ -445,6 +445,12 @@ async function initAppMode() {
         modeDialog.style.display = 'none';
         applyAppMode();
         return;
+    } else if (savedMode === 'worker') {
+        appMode = 'worker';
+        modeDialog.style.display = 'none';
+        applyAppMode();
+        startPolling();
+        return;
     }
 
     return new Promise((resolve) => {
@@ -626,24 +632,47 @@ function applyAppMode() {
     
 
     // ヘッダータイトルを更新
-
+    // ヘッダータイトルを更新
     const headerTitle = document.querySelector("header h1");
-
     if (headerTitle) {
-
         if (isWorker) {
-
             headerTitle.textContent = "🏭 生産計画スケジューラー【作業者】";
+            document.body.classList.add("mode-worker");
+            
+            // 下部のモード切替ボタンを表示（作業者用）
+            const switchBtn = document.getElementById("worker-mode-switch-btn");
+            if (switchBtn) {
+                switchBtn.style.display = "block";
+                switchBtn.onclick = () => {
+                   if(confirm("モード選択画面に戻りますか？")) {
+                       localStorage.removeItem("appMode");
+                       window.location.reload();
+                   }
+                };
+            }
 
         } else {
-
             headerTitle.textContent = "🏭 生産計画スケジューラー【管理者】";
-
+            document.body.classList.remove("mode-worker");
+            
+            // 下部のボタンを隠す
+            const switchBtn = document.getElementById("worker-mode-switch-btn");
+            if (switchBtn) switchBtn.style.display = "none";
         }
-
     }
 
+    // ヘッダー内の共通「モード切替」ボタンのイベントハンドラ
+    const headerSwitchBtn = document.getElementById("btn-switch-mode");
+    if (headerSwitchBtn) {
+        headerSwitchBtn.onclick = () => {
+            if(confirm("モード選択画面に戻りますか？")) {
+                localStorage.removeItem("appMode");
+                window.location.reload();
+            }
+        };
+    }
 }
+
 
 // カスタムツールチップ要素を作成
 
@@ -2013,6 +2042,15 @@ function renderScheduleTable() {
         const tr = document.createElement("tr");
 
         tr.dataset.id = schedule.id;
+        
+        // 作業者モード用: ステータスに応じたクラスを追加
+        if (schedule.production_status === "生産中") {
+            tr.classList.add("row-production");
+        } else if (schedule.production_status === "生産終了") {
+            tr.classList.add("row-completed");
+        } else {
+            tr.classList.add("row-pending");
+        }
 
         // schedule_numberを優先、なければkintone_record_id
 
@@ -2032,7 +2070,7 @@ function renderScheduleTable() {
 
             <td>${schedule.notes || "-"}</td>
 
-            <td><span class="status-badge">${schedule.production_status}</span></td>
+            <td><span class="status-badge ${getStatusBadgeClass(schedule.production_status)}">${schedule.production_status}</span></td>
 
             <td><span class="status-badge ${schedule.sync_status}">${getSyncStatusText(schedule.sync_status)}</span></td>
 
@@ -2068,7 +2106,12 @@ function renderScheduleTable() {
 
 }
 
-
+// ステータスに応じたバッジクラスを取得
+function getStatusBadgeClass(status) {
+    if (status === "生産中") return "status-production";
+    if (status === "生産終了") return "status-completed";
+    return "status-scheduled";
+}
 
 // 編集モーダルを開く
 

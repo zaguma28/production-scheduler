@@ -46,6 +46,9 @@
                 <button id="btn-sync-to-kintone" class="btn btn-primary">
                     📤 kintoneへ送信
                 </button>
+                <button id="btn-switch-mode" class="btn btn-secondary" title="モード切替">
+                    🔄 モード切替
+                </button>
                 <button id="btn-settings" class="btn btn-icon" title="設定">
                     ⚙️
                 </button>
@@ -330,7 +333,12 @@
     </div>
     </div>
 
-    <script src="app.js?v=20260204201000"></script>
+    <!-- モード切替ボタン（作業者モード用） -->
+    <button id="worker-mode-switch-btn" class="btn btn-secondary" style="display:none; position:fixed; bottom:30px; left:30px; z-index:9999; padding:12px 24px; font-weight:bold; font-size:16px;">
+        🔄 モード切替
+    </button>
+
+    <script src="app.js?v=20260204201004"></script>
 </body>
 </html>
 
