@@ -26,6 +26,9 @@ const productWeights = {
 
 };
 
+// 視認性のための最小表示時間（45分）
+const MIN_VISUAL_DURATION_MS = 45 * 60 * 1000;
+
 // 日時フォーマット関数（早期定義）
 function formatDateTime(dateStr) {
     if (!dateStr) return "-";
@@ -388,6 +391,9 @@ function initShapeModal() {
 }
 
 let schedules = [];
+
+// ガントチャートの1時間あたりのピクセル数（動的に変更される）
+let currentHourPx = 60;
 
 let currentDate = new Date();
 
@@ -1243,6 +1249,17 @@ function initEventListeners() {
     initMemoModal();
 
     initShapeModal();
+
+    // ウィンドウリサイズ時にガントチャートを再描画
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (document.getElementById("gantt-view").classList.contains("active")) {
+                renderGantt();
+            }
+        }, 200);
+    });
 
 }
 
@@ -2438,23 +2455,33 @@ function renderGantt() {
 
 
 
-    // 時間軸とグリッドの幅を一致させる (label 140px + 25時間 * 60px = 1640px)
-    // タイムラインのスタイル調整
-    timeline.style.minWidth = `${140 + 25 * 60}px`;
+    // コンテナの有効幅を取得（ラベル幅140pxを除く）
+    const containerWidth = container.clientWidth;
+    const availableWidth = Math.max(0, containerWidth - 140);
+    
+    // 24時間で分割、ただし最小60pxは維持
+    currentHourPx = Math.max(60, availableWidth / 24);
+
+    // タイムラインの幅を設定
+    timeline.style.minWidth = `${140 + currentHourPx * 24}px`;
     
     timeline.innerHTML = '<div style="width:140px;padding:10px;font-weight:bold;flex-shrink:0;">日付</div>';
 
-    for (let h = 6; h <= 30; h++) {
+    // 24時間分（6:00〜翌5:00）を表示
+    for (let h = 6; h < 30; h++) {
 
         const hour = h % 24;
 
-        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);flex-shrink:0;">${hour}:00</div>`;
+        timeline.innerHTML += `<div style="width:${currentHourPx}px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);flex-shrink:0;">${hour}:00</div>`;
 
     }
 
 
 
     rows.innerHTML = "";
+    
+    // 行コンテナ（gantt-rows）の幅も合わせる
+    rows.style.minWidth = `${140 + currentHourPx * 24}px`;
 
     const startDate = new Date(currentDate);
 
@@ -2500,6 +2527,11 @@ function renderGantt() {
         contentDiv.className = "gantt-row-content";
 
         contentDiv.id = `gantt-date-${dateStr}`;
+        
+        // グリッドのサイズを動的に更新
+        contentDiv.style.width = `${currentHourPx * 24}px`;
+        contentDiv.style.backgroundSize = `${currentHourPx}px 100%`;
+        contentDiv.style.backgroundImage = `repeating-linear-gradient(90deg, transparent, transparent ${currentHourPx-1}px, #F5F5F7 ${currentHourPx-1}px, #F5F5F7 ${currentHourPx}px)`;
 
         row.appendChild(contentDiv);
 
@@ -2668,11 +2700,11 @@ function renderOverlayItems(container, startDate) {
 
     const msFrom6AM = clampStart.getTime() - rowStartMs; 
     // cssの.gantt-row-label width: 140pxに合わせてオフセットを調整
-    leftPx = 140 + (msFrom6AM / (60 * 60 * 1000)) * 60;
+    leftPx = 140 + (msFrom6AM / (60 * 60 * 1000)) * currentHourPx;
     topPx = rowTop + 10; // This was already calculated as rowTop + 10
     
     const durationMs = clampEnd.getTime() - clampStart.getTime();
-    widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60); // 念のためmax(0)
+    widthPx = Math.max(currentHourPx, (durationMs / (60 * 60 * 1000)) * currentHourPx); // 念のためmax(0)
     heightPx = 120; // Default height increased
         }
         
@@ -3053,15 +3085,15 @@ function calculateLanes(schedules) {
 
             const lastSchedule = lane[lane.length - 1];
 
-            const lastnd = lastSchedule.end_datetime
+            // 視認性確保のため、終了判定には最小表示時間を考慮する
+            const effectiveEnd = Math.max(
+                lastSchedule.end_datetime 
+                    ? new Date(lastSchedule.end_datetime).getTime() 
+                    : new Date(lastSchedule.start_datetime).getTime() + 60*60*1000,
+                new Date(lastSchedule.start_datetime).getTime() + MIN_VISUAL_DURATION_MS
+            );
 
-                ? new Date(lastSchedule.end_datetime).getTime()
-
-                : new Date(lastSchedule.start_datetime).getTime() + 60*60*1000;
-
-
-
-            if (start >= lastnd) {
+            if (start >= effectiveEnd) {
 
                 lane.push(schedule);
 
@@ -3113,11 +3145,14 @@ function createGanttBar(schedule, dayStart6AM, laneIndex) {
     const msFrom6AM = clampStart.getTime() - rowStartMs; 
     // .gantt-row-contentはlabel(140px)の後に配置されるため、内部座標0が6:00と一致する
     // したがってオフセット140は不要
-    const leftPx = (msFrom6AM / (60 * 60 * 1000)) * 60;
+    const leftPx = (msFrom6AM / (60 * 60 * 1000)) * currentHourPx;
     
     // 幅の計算
     const durationMs = clampEnd.getTime() - clampStart.getTime();
-    const widthPx = Math.max(0, (durationMs / (60 * 60 * 1000)) * 60);
+    // 最小幅（45分相当 = 0.75時間）を確保
+    // 45分 = 0.75時間 -> currentHourPx * 0.75
+    const MIN_WIDTH_PX = currentHourPx * 0.75; 
+    const widthPx = Math.max(MIN_WIDTH_PX, (durationMs / (60 * 60 * 1000)) * currentHourPx);
 
     // 幅が0以下（表示不能）の場合は描画しない
     if (widthPx <= 0) return null;
