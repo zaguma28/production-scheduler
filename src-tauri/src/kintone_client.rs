@@ -15,6 +15,10 @@ pub struct KintoneConfig {
     pub api_token: String,
     pub memo_app_id: Option<u32>,
     pub memo_api_token: Option<String>,
+    pub yamazumi_app_id: Option<u32>,
+    pub yamazumi_api_token: Option<String>,
+    pub kobukuro_app_id: Option<u32>,
+    pub kobukuro_api_token: Option<String>,
 }
 
 /// 生産スケジュールレコード
@@ -22,6 +26,8 @@ pub struct KintoneConfig {
 pub struct ProductionRecord {
     pub record_number: Option<u32>,
     pub product_name: String,
+    pub product_display_name: Option<String>,
+    pub category: Option<String>,
     pub start_datetime: DateTime<Utc>,
     pub end_datetime: Option<DateTime<Utc>>,
     pub quantity1: Option<f64>,
@@ -234,6 +240,114 @@ impl KintoneClient {
         } else {
             Err(anyhow::anyhow!("Delete failed: {}", text))
         }
+    }
+
+    /// ID354（山積表）またはID368（小袋実績）に送信
+    /// スケジュール番号で検索し、未生産なら更新、なければ新規作成
+    pub async fn sync_to_yamazumi_or_kobukuro(
+        &self,
+        schedule_number: &str,
+        record_data: serde_json::Value,
+        is_kobukuro: bool, // true=ID368, false=ID354
+    ) -> Result<()> {
+        let (app_id, api_token) = if is_kobukuro {
+            (
+                self.config.kobukuro_app_id.unwrap_or(368),
+                self.config.kobukuro_api_token.clone().unwrap_or_default()
+            )
+        } else {
+            (
+                self.config.yamazumi_app_id.unwrap_or(354),
+                self.config.yamazumi_api_token.clone().unwrap_or_default()
+            )
+        };
+
+        if api_token.is_empty() {
+            return Err(anyhow::anyhow!("APIトークンが設定されていません"));
+        }
+
+        // スケジュール番号で検索
+        let query = format!("スケジュール番号 = \"{}\"", schedule_number);
+        let search_url = format!("{}/records.json", self.base_url());
+        
+        let response = self.client
+            .get(&search_url)
+            .header("X-Cybozu-API-Token", &api_token)
+            .query(&[
+                ("app", app_id.to_string()),
+                ("query", query),
+            ])
+            .send()
+            .await?;
+
+        let json: serde_json::Value = response.json().await?;
+        let empty_vec = vec![];
+        let records = json["records"].as_array().unwrap_or(&empty_vec);
+
+        if let Some(existing_record) = records.first() {
+            // 既存レコードがある場合
+            let record_id = existing_record["レコード番号"]["value"]
+                .as_str()
+                .and_then(|s| s.parse::<u32>().ok())
+                .ok_or_else(|| anyhow::anyhow!("レコードIDの取得に失敗"))?;
+
+            let status = existing_record["生産状況"]["value"].as_str().unwrap_or("");
+
+            if status == "未生産" {
+                // 未生産なら更新
+                let update_url = format!("{}/record.json", self.base_url());
+                let body = serde_json::json!({
+                    "app": app_id,
+                    "id": record_id,
+                    "record": record_data
+                });
+
+                eprintln!("=== Updating {} record: {} ===", if is_kobukuro { "ID368" } else { "ID354" }, record_id);
+
+                let response = self.client
+                    .put(&update_url)
+                    .header("X-Cybozu-API-Token", &api_token)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .json(&body)
+                    .send()
+                    .await?;
+
+                if !response.status().is_success() {
+                    let text = response.text().await?;
+                    return Err(anyhow::anyhow!("更新に失敗しました: {}", text));
+                }
+
+                eprintln!("=== Updated successfully ===");
+            } else {
+                eprintln!("=== Skipped (status: {}) ===", status);
+            }
+        } else {
+            // 既存レコードがない場合は新規作成
+            let add_url = format!("{}/record.json", self.base_url());
+            let body = serde_json::json!({
+                "app": app_id,
+                "record": record_data
+            });
+
+            eprintln!("=== Adding new {} record ===", if is_kobukuro { "ID368" } else { "ID354" });
+
+            let response = self.client
+                .post(&add_url)
+                .header("X-Cybozu-API-Token", &api_token)
+                .header(header::CONTENT_TYPE, "application/json")
+                .json(&body)
+                .send()
+                .await?;
+
+            if !response.status().is_success() {
+                let text = response.text().await?;
+                return Err(anyhow::anyhow!("新規作成に失敗しました: {}", text));
+            }
+
+            eprintln!("=== Added successfully ===");
+        }
+
+        Ok(())
     }
 }
 

@@ -533,7 +533,15 @@ async function initKintoneConfig() {
 
         memo_app_id: 507,
 
-        memo_api_token: "hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL"
+        memo_api_token: "hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL",
+
+        yamazumi_app_id: 354,
+
+        yamazumi_api_token: "Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC",
+
+        kobukuro_app_id: 368,
+
+        kobukuro_api_token: "4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS"
 
     };
 

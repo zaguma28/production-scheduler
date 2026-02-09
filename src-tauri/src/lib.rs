@@ -33,6 +33,10 @@ fn load_kintone_config() -> KintoneConfig {
         api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo".to_string(),
         memo_app_id: Some(507),
         memo_api_token: Some("hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL".to_string()),
+        yamazumi_app_id: Some(354),
+        yamazumi_api_token: Some("Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC".to_string()),
+        kobukuro_app_id: Some(368),
+        kobukuro_api_token: Some("4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS".to_string()),
     }
 }
 

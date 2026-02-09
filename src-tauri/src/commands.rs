@@ -17,6 +17,8 @@ pub struct AppState {
 #[derive(Debug, Deserialize)]
 pub struct AddScheduleRequest {
     pub product_name: String,
+    pub product_display_name: Option<String>,
+    pub category: Option<String>,
     #[serde(default)]
     pub line: String,
     pub start_datetime: String,
@@ -43,6 +45,10 @@ pub struct KintoneConfigRequest {
     pub api_token: String,
     pub memo_app_id: Option<u32>,
     pub memo_api_token: Option<String>,
+    pub yamazumi_app_id: Option<u32>,
+    pub yamazumi_api_token: Option<String>,
+    pub kobukuro_app_id: Option<u32>,
+    pub kobukuro_api_token: Option<String>,
 }
 
 /// スケジュール更新リクエスト
@@ -168,6 +174,48 @@ pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: 
 
     eprintln!("=== kintone record created: id={} ===", kintone_id);
 
+    // 分類に応じてID354（山積表）またはID368（小袋実績）に送信
+    if let Some(ref category) = request.category {
+        if let Some(ref prod_status) = request.production_status {
+            if prod_status == "未生産" {
+                let is_kobukuro = category == "小袋";
+                let is_baler = category == "ベーラー";
+
+                if is_kobukuro || is_baler {
+                    let secondary_record = if is_kobukuro {
+                        // ID368（小袋実績）用のレコード
+                        serde_json::json!({
+                            "品番": { "value": request.product_name.clone() },
+                            "品名": { "value": request.product_display_name.clone().unwrap_or_default() },
+                            "製造予定日時": { "value": request.start_datetime.clone() },
+                            "製造数量": { "value": request.quantity1.map(|v| v.to_string()).unwrap_or_default() },
+                            "生産状況": { "value": prod_status.clone() },
+                            "スケジュール番号": { "value": schedule_number.clone() },
+                            "製造備考": { "value": request.notes.clone().unwrap_or_default() },
+                        })
+                    } else {
+                        // ID354（山積表）用のレコード
+                        serde_json::json!({
+                            "品番": { "value": request.product_name.clone() },
+                            "品名": { "value": request.product_display_name.clone().unwrap_or_default() },
+                            "製造予定日時": { "value": request.start_datetime.clone() },
+                            "生産状況": { "value": prod_status.clone() },
+                            "スケジュール番号": { "value": schedule_number.clone() },
+                            "コメント": { "value": request.notes.clone().unwrap_or_default() },
+                        })
+                    };
+
+                    eprintln!("=== Syncing to {} ===", if is_kobukuro { "ID368（小袋実績）" } else { "ID354（山積表）" });
+                    
+                    if let Err(e) = client.sync_to_yamazumi_or_kobukuro(&schedule_number, secondary_record, is_kobukuro).await {
+                        eprintln!("=== Secondary sync warning: {} ===", e);
+                        // エラーがあっても処理は続行（メインのID506は成功しているため）
+                    }
+                }
+            }
+        }
+    }
+
     // ローカルDBに保存
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let schedule = LocalSchedule {
@@ -175,6 +223,8 @@ pub async fn add_schedule_with_kintone_sync(request: AddScheduleRequest, state: 
         kintone_record_id: Some(kintone_id),
         schedule_number: Some(schedule_number),
         product_name: request.product_name,
+        product_display_name: request.product_display_name,
+        category: request.category,
         line: request.line,
         start_datetime: request.start_datetime,
         end_datetime: request.end_datetime,
@@ -232,6 +282,8 @@ fn add_memo_local_only(request: AddScheduleRequest, state: State<'_, AppState>) 
         kintone_record_id: None,
         schedule_number: None,
         product_name: request.product_name,
+        product_display_name: request.product_display_name,
+        category: request.category,
         line: request.line,
         start_datetime: request.start_datetime,
         end_datetime: request.end_datetime,
@@ -290,6 +342,8 @@ fn add_schedule_local_only(request: AddScheduleRequest, state: State<'_, AppStat
         kintone_record_id: None,
         schedule_number: None,
         product_name: request.product_name,
+        product_display_name: request.product_display_name,
+        category: request.category,
         line: request.line,
         start_datetime: request.start_datetime,
         end_datetime: request.end_datetime,
@@ -382,6 +436,10 @@ pub fn save_kintone_config(config: KintoneConfigRequest, state: State<AppState>)
         api_token: config.api_token.clone(),
         memo_app_id: config.memo_app_id,
         memo_api_token: config.memo_api_token.clone(),
+        yamazumi_app_id: config.yamazumi_app_id,
+        yamazumi_api_token: config.yamazumi_api_token.clone(),
+        kobukuro_app_id: config.kobukuro_app_id,
+        kobukuro_api_token: config.kobukuro_api_token.clone(),
     };
 
     // 設定をJSONファイルに保存
@@ -459,6 +517,10 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
         api_token: "xZ85wdaTlqTnSpOxvaLEJrR8E5pCaJaX0jDcdpd7".to_string(),
         memo_app_id: None,
         memo_api_token: None,
+        yamazumi_app_id: None,
+        yamazumi_api_token: None,
+        kobukuro_app_id: None,
+        kobukuro_api_token: None,
     };
 
     eprintln!("=== MIGRATION START: Fetching from App 351 ===");
@@ -508,10 +570,16 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
             }
             // Field mapping (Legacy 351 -> LocalSchedule)
             
-            // Product Name: 製品名 (FS450K etc) or 製品名_アプリ
+            // Product Name: 製品名 (FS450K etc) or 製品名_アプリ (品番)
             let mut product_name = get_string_value(&record, "製品名");
             if product_name.is_empty() { product_name = get_string_value(&record, "製品名_アプリ"); }
             if product_name.is_empty() { continue; } // Skip invalid
+
+            // Product Display Name: 品名
+            let product_display_name = get_optional_string_value(&record, "品名");
+
+            // Category: 分類 (ベーラー/小袋)
+            let category = get_optional_string_value(&record, "分類");
 
             // Dates: 開始日時1, 総終了日時, 内終了日時1
             let start_datetime = get_string_value(&record, "開始日時1");
@@ -544,6 +612,8 @@ pub async fn fetch_from_kintone(state: State<'_, AppState>) -> Result<ApiRespons
                 kintone_record_id: None, // Reset ID for migration (New record for 506)
                 schedule_number: schedule_number,
                 product_name: product_name.clone(),
+                product_display_name: product_display_name,
+                category: category,
                 line: "".to_string(),
                 start_datetime: start_datetime,
                 end_datetime: end_datetime,
