@@ -29,8 +29,16 @@ fn load_kintone_config() -> KintoneConfig {
     eprintln!("デフォルト設定を使用します");
     KintoneConfig {
         subdomain: "jfe-rockfiber".to_string(),
-        app_id: 351,
-        api_token: "xZ85wdaTlqTnSpOxvaLEJrR8E5pCaJaX0jDcdpd7".to_string(),
+        app_id: 506,
+        api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo".to_string(),
+        memo_app_id: Some(507),
+        memo_api_token: Some("hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL".to_string()),
+        yamazumi_app_id: Some(354),
+        yamazumi_api_token: Some("Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC".to_string()),
+        kobukuro_app_id: Some(368),
+        kobukuro_api_token: Some("4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS".to_string()),
+        tsumikomi_app_id: Some(514),
+        tsumikomi_api_token: Some("nU2EcpjY1f7CQxKNs0PoPCnRRcdpl2xgnlK4GCOA".to_string()),
     }
 }
 
@@ -82,6 +90,7 @@ pub fn run() {
             commands::get_product_weight,
             commands::delete_schedule,
             commands::get_app_mode,
+            commands::fetch_kintone_records,
         ])
         .run(tauri::generate_context!())
         .expect("アプリケーションの実行中にエラーが発生しました");

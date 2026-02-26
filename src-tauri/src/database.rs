@@ -11,6 +11,8 @@ pub struct LocalSchedule {
     pub kintone_record_id: Option<u32>,
     pub schedule_number: Option<String>,
     pub product_name: String,
+    pub product_display_name: Option<String>,
+    pub category: Option<String>,
     pub line: String,
     pub start_datetime: String,
     pub end_datetime: Option<String>,
@@ -60,6 +62,8 @@ impl Database {
                 kintone_record_id INTEGER,
                 schedule_number TEXT,
                 product_name TEXT NOT NULL,
+                product_display_name TEXT,
+                category TEXT,
                 line TEXT NOT NULL,
                 start_datetime TEXT NOT NULL,
                 end_datetime TEXT,
@@ -100,6 +104,8 @@ impl Database {
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency7 TEXT", []);
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN efficiency8 TEXT", []);
         let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN notes TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN product_display_name TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE schedules ADD COLUMN category TEXT", []);
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS kintone_config (
@@ -173,15 +179,17 @@ impl Database {
         
         self.conn.execute(
             "INSERT INTO schedules (
-                kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
+                kintone_record_id, schedule_number, product_name, product_display_name, category, line, start_datetime, end_datetime,
                 quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
                 total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
                 production_status, notes, sync_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
             params![
                 schedule.kintone_record_id,
                 schedule_number,
                 schedule.product_name,
+                schedule.product_display_name,
+                schedule.category,
                 schedule.line,
                 schedule.start_datetime,
                 schedule.end_datetime,
@@ -215,7 +223,7 @@ impl Database {
     /// すべてのスケジュールを取得
     pub fn get_all_schedules(&self) -> Result<Vec<LocalSchedule>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
+            "SELECT id, kintone_record_id, schedule_number, product_name, product_display_name, category, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
                     total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
                     production_status, notes, sync_status, created_at, updated_at
@@ -228,31 +236,33 @@ impl Database {
                 kintone_record_id: row.get(1)?,
                 schedule_number: row.get(2)?,
                 product_name: row.get(3)?,
-                line: row.get(4)?,
-                start_datetime: row.get(5)?,
-                end_datetime: row.get(6)?,
-                quantity1: row.get(7)?,
-                quantity2: row.get(8)?,
-                quantity3: row.get(9)?,
-                quantity4: row.get(10)?,
-                quantity5: row.get(11)?,
-                quantity6: row.get(12)?,
-                quantity7: row.get(13)?,
-                quantity8: row.get(14)?,
-                total_quantity: row.get(15)?,
-                efficiency1: row.get(16)?,
-                efficiency2: row.get(17)?,
-                efficiency3: row.get(18)?,
-                efficiency4: row.get(19)?,
-                efficiency5: row.get(20)?,
-                efficiency6: row.get(21)?,
-                efficiency7: row.get(22)?,
-                efficiency8: row.get(23)?,
-                production_status: row.get(24)?,
-                notes: row.get(25)?,
-                sync_status: row.get(26)?,
-                created_at: row.get(27)?,
-                updated_at: row.get(28)?,
+                product_display_name: row.get(4)?,
+                category: row.get(5)?,
+                line: row.get(6)?,
+                start_datetime: row.get(7)?,
+                end_datetime: row.get(8)?,
+                quantity1: row.get(9)?,
+                quantity2: row.get(10)?,
+                quantity3: row.get(11)?,
+                quantity4: row.get(12)?,
+                quantity5: row.get(13)?,
+                quantity6: row.get(14)?,
+                quantity7: row.get(15)?,
+                quantity8: row.get(16)?,
+                total_quantity: row.get(17)?,
+                efficiency1: row.get(18)?,
+                efficiency2: row.get(19)?,
+                efficiency3: row.get(20)?,
+                efficiency4: row.get(21)?,
+                efficiency5: row.get(22)?,
+                efficiency6: row.get(23)?,
+                efficiency7: row.get(24)?,
+                efficiency8: row.get(25)?,
+                production_status: row.get(26)?,
+                notes: row.get(27)?,
+                sync_status: row.get(28)?,
+                created_at: row.get(29)?,
+                updated_at: row.get(30)?,
             })
         })?;
 
@@ -262,7 +272,7 @@ impl Database {
     /// 同期待ちスケジュールを取得
     pub fn get_pending_schedules(&self) -> Result<Vec<LocalSchedule>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
+            "SELECT id, kintone_record_id, schedule_number, product_name, product_display_name, category, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
                     total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
                     production_status, notes, sync_status, created_at, updated_at
@@ -275,31 +285,33 @@ impl Database {
                 kintone_record_id: row.get(1)?,
                 schedule_number: row.get(2)?,
                 product_name: row.get(3)?,
-                line: row.get(4)?,
-                start_datetime: row.get(5)?,
-                end_datetime: row.get(6)?,
-                quantity1: row.get(7)?,
-                quantity2: row.get(8)?,
-                quantity3: row.get(9)?,
-                quantity4: row.get(10)?,
-                quantity5: row.get(11)?,
-                quantity6: row.get(12)?,
-                quantity7: row.get(13)?,
-                quantity8: row.get(14)?,
-                total_quantity: row.get(15)?,
-                efficiency1: row.get(16)?,
-                efficiency2: row.get(17)?,
-                efficiency3: row.get(18)?,
-                efficiency4: row.get(19)?,
-                efficiency5: row.get(20)?,
-                efficiency6: row.get(21)?,
-                efficiency7: row.get(22)?,
-                efficiency8: row.get(23)?,
-                production_status: row.get(24)?,
-                notes: row.get(25)?,
-                sync_status: row.get(26)?,
-                created_at: row.get(27)?,
-                updated_at: row.get(28)?,
+                product_display_name: row.get(4)?,
+                category: row.get(5)?,
+                line: row.get(6)?,
+                start_datetime: row.get(7)?,
+                end_datetime: row.get(8)?,
+                quantity1: row.get(9)?,
+                quantity2: row.get(10)?,
+                quantity3: row.get(11)?,
+                quantity4: row.get(12)?,
+                quantity5: row.get(13)?,
+                quantity6: row.get(14)?,
+                quantity7: row.get(15)?,
+                quantity8: row.get(16)?,
+                total_quantity: row.get(17)?,
+                efficiency1: row.get(18)?,
+                efficiency2: row.get(19)?,
+                efficiency3: row.get(20)?,
+                efficiency4: row.get(21)?,
+                efficiency5: row.get(22)?,
+                efficiency6: row.get(23)?,
+                efficiency7: row.get(24)?,
+                efficiency8: row.get(25)?,
+                production_status: row.get(26)?,
+                notes: row.get(27)?,
+                sync_status: row.get(28)?,
+                created_at: row.get(29)?,
+                updated_at: row.get(30)?,
             })
         })?;
 
@@ -312,6 +324,12 @@ impl Database {
             "UPDATE schedules SET sync_status = ?1, kintone_record_id = ?2, updated_at = datetime('now') WHERE id = ?3",
             params![status, kintone_id, id],
         )?;
+        Ok(())
+    }
+
+    /// 全スケジュールを削除
+    pub fn delete_all_schedules(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM schedules", [])?;
         Ok(())
     }
 
@@ -377,13 +395,13 @@ impl Database {
         if exists {
             self.conn.execute(
                 "UPDATE schedules SET
-                    schedule_number = ?1, product_name = ?2, line = ?3, start_datetime = ?4, end_datetime = ?5,
-                    quantity1 = ?6, quantity2 = ?7, quantity3 = ?8, quantity4 = ?9, quantity5 = ?10, quantity6 = ?11, quantity7 = ?12, quantity8 = ?13,
-                    total_quantity = ?14, efficiency1 = ?15, efficiency2 = ?16, efficiency3 = ?17, efficiency4 = ?18, efficiency5 = ?19, efficiency6 = ?20, efficiency7 = ?21, efficiency8 = ?22,
-                    production_status = ?23, notes = ?24, sync_status = 'synced', updated_at = datetime('now')
-                WHERE kintone_record_id = ?25",
+                    schedule_number = ?1, product_name = ?2, product_display_name = ?3, category = ?4, line = ?5, start_datetime = ?6, end_datetime = ?7,
+                    quantity1 = ?8, quantity2 = ?9, quantity3 = ?10, quantity4 = ?11, quantity5 = ?12, quantity6 = ?13, quantity7 = ?14, quantity8 = ?15,
+                    total_quantity = ?16, efficiency1 = ?17, efficiency2 = ?18, efficiency3 = ?19, efficiency4 = ?20, efficiency5 = ?21, efficiency6 = ?22, efficiency7 = ?23, efficiency8 = ?24,
+                    production_status = ?25, notes = ?26, sync_status = 'synced', updated_at = datetime('now')
+                WHERE kintone_record_id = ?27",
                 params![
-                    schedule.schedule_number, schedule.product_name, schedule.line, schedule.start_datetime, schedule.end_datetime,
+                    schedule.schedule_number, schedule.product_name, schedule.product_display_name, schedule.category, schedule.line, schedule.start_datetime, schedule.end_datetime,
                     schedule.quantity1, schedule.quantity2, schedule.quantity3, schedule.quantity4, schedule.quantity5, schedule.quantity6, schedule.quantity7, schedule.quantity8,
                     schedule.total_quantity, schedule.efficiency1, schedule.efficiency2, schedule.efficiency3, schedule.efficiency4, schedule.efficiency5, schedule.efficiency6, schedule.efficiency7, schedule.efficiency8,
                     schedule.production_status, schedule.notes, schedule.kintone_record_id
@@ -392,15 +410,17 @@ impl Database {
         } else {
             self.conn.execute(
                 "INSERT INTO schedules (
-                    kintone_record_id, schedule_number, product_name, line, start_datetime, end_datetime,
+                    kintone_record_id, schedule_number, product_name, product_display_name, category, line, start_datetime, end_datetime,
                     quantity1, quantity2, quantity3, quantity4, quantity5, quantity6, quantity7, quantity8,
                     total_quantity, efficiency1, efficiency2, efficiency3, efficiency4, efficiency5, efficiency6, efficiency7, efficiency8,
                     production_status, notes, sync_status, created_at, updated_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, 'synced', datetime('now'), datetime('now'))",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, 'synced', datetime('now'), datetime('now'))",
                 params![
                     schedule.kintone_record_id,
                     schedule.schedule_number,
                     schedule.product_name,
+                    schedule.product_display_name,
+                    schedule.category,
                     schedule.line,
                     schedule.start_datetime,
                     schedule.end_datetime,

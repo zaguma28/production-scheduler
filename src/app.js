@@ -26,6 +26,9 @@ const productWeights = {
 
 };
 
+// 視認性のための最小表示時間（45分）
+const MIN_VISUAL_DURATION_MS = 45 * 60 * 1000;
+
 // 日時フォーマット関数（早期定義）
 function formatDateTime(dateStr) {
     if (!dateStr) return "-";
@@ -95,9 +98,9 @@ function initMemoModal() {
 
         e.preventDefault();
 
-        // 現在時刻を使用（日時選択はなし）
-        const startDate = new Date();
-        const duration = 2; // デフォルト2時間
+        // コンテキストメニューでクリックされた日時があればそれを使用、なければ現在時刻
+        const startDate = contextClickedTime ? new Date(contextClickedTime) : new Date();
+        const duration = 4; // デフォルト4時間 (二回り大きく)
 
         const text = document.getElementById("memo-text").value;
 
@@ -110,13 +113,7 @@ function initMemoModal() {
 
 
 
-        const formatIso = (d) => {
-
-            const pad = (n) => n.toString().padStart(2, '0');
-
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-        };
+        const formatIso = (d) => d.toISOString();
 
 
 
@@ -176,7 +173,7 @@ function initMemoModal() {
 
     // コンテキストメニュー用の変数
 
-    let contextClickedTime = null;
+    // let contextClickedTime = null; // Removed: Now global
 
     const contextMenu = document.getElementById("context-menu");
 
@@ -314,9 +311,9 @@ function initShapeModal() {
 
         e.preventDefault();
 
-        // 現在時刻を使用（日時選択はなし）
-        const startDate = new Date();
-        const duration = 2; // デフォルト2時間
+        // コンテキストメニューでクリックされた日時があればそれを使用、なければ現在時刻
+        const startDate = contextClickedTime ? new Date(contextClickedTime) : new Date();
+        const duration = 4; // デフォルト4時間 (二回り大きく)
 
         const shapeType = document.getElementById("shape-type").value;
 
@@ -329,13 +326,7 @@ function initShapeModal() {
 
 
 
-        const formatIso = (d) => {
-
-            const pad = (n) => n.toString().padStart(2, '0');
-
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-        };
+        const formatIso = (d) => d.toISOString();
 
 
 
@@ -401,6 +392,9 @@ function initShapeModal() {
 
 let schedules = [];
 
+// ガントチャートの1時間あたりのピクセル数（動的に変更される）
+let currentHourPx = 60;
+
 let currentDate = new Date();
 
 let appMode = "admin"; // "admin" or "worker"
@@ -456,6 +450,12 @@ async function initAppMode() {
         appMode = 'admin';
         modeDialog.style.display = 'none';
         applyAppMode();
+        return;
+    } else if (savedMode === 'worker') {
+        appMode = 'worker';
+        modeDialog.style.display = 'none';
+        applyAppMode();
+        startPolling();
         return;
     }
 
@@ -529,7 +529,23 @@ async function initKintoneConfig() {
 
         app_id: 506,
 
-        api_token: "3CakeA8SORFDrOawAcL3Y2UY8TogZkLw52U5RBo"
+        api_token: "3CakeA8SORFDrOawAcL3Y2UEY8TogZkLw52U5RBo",
+
+        memo_app_id: 507,
+
+        memo_api_token: "hkVvZfY6j5dgNSda9OE8WPnLefezfrIoGsR387gL",
+
+        yamazumi_app_id: 354,
+
+        yamazumi_api_token: "Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC",
+
+        kobukuro_app_id: 368,
+
+        kobukuro_api_token: "4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS",
+
+        tsumikomi_app_id: 514,
+
+        tsumikomi_api_token: "nU2EcpjY1f7CQxKNs0PoPCnRRcdpl2xgnlK4GCOA"
 
     };
 
@@ -543,6 +559,14 @@ async function initKintoneConfig() {
 
     const apiTokenl = document.getElementById("api-token");
 
+    const memoAppIdl = document.getElementById("memo-app-id");
+
+    const memoApiTokenl = document.getElementById("memo-api-token");
+
+    const tsumikomiAppIdl = document.getElementById("tsumikomi-app-id");
+
+    const tsumikomiApiTokenl = document.getElementById("tsumikomi-api-token");
+
     
 
     if (subdomainl) subdomainl.value = defaultConfig.subdomain;
@@ -550,6 +574,14 @@ async function initKintoneConfig() {
     if (appIdl) appIdl.value = defaultConfig.app_id;
 
     if (apiTokenl) apiTokenl.value = defaultConfig.api_token;
+
+    if (memoAppIdl) memoAppIdl.value = defaultConfig.memo_app_id;
+
+    if (memoApiTokenl) memoApiTokenl.value = defaultConfig.memo_api_token;
+
+    if (tsumikomiAppIdl) tsumikomiAppIdl.value = defaultConfig.tsumikomi_app_id;
+
+    if (tsumikomiApiTokenl) tsumikomiApiTokenl.value = defaultConfig.tsumikomi_api_token;
 
     
 
@@ -626,24 +658,47 @@ function applyAppMode() {
     
 
     // ヘッダータイトルを更新
-
+    // ヘッダータイトルを更新
     const headerTitle = document.querySelector("header h1");
-
     if (headerTitle) {
-
         if (isWorker) {
-
             headerTitle.textContent = "🏭 生産計画スケジューラー【作業者】";
+            document.body.classList.add("mode-worker");
+            
+            // 下部のモード切替ボタンを表示（作業者用）
+            const switchBtn = document.getElementById("worker-mode-switch-btn");
+            if (switchBtn) {
+                switchBtn.style.display = "block";
+                switchBtn.onclick = () => {
+                   if(confirm("モード選択画面に戻りますか？")) {
+                       localStorage.removeItem("appMode");
+                       window.location.reload();
+                   }
+                };
+            }
 
         } else {
-
             headerTitle.textContent = "🏭 生産計画スケジューラー【管理者】";
-
+            document.body.classList.remove("mode-worker");
+            
+            // 下部のボタンを隠す
+            const switchBtn = document.getElementById("worker-mode-switch-btn");
+            if (switchBtn) switchBtn.style.display = "none";
         }
-
     }
 
+    // ヘッダー内の共通「モード切替」ボタンのイベントハンドラ
+    const headerSwitchBtn = document.getElementById("btn-switch-mode");
+    if (headerSwitchBtn) {
+        headerSwitchBtn.onclick = () => {
+            if(confirm("モード選択画面に戻りますか？")) {
+                localStorage.removeItem("appMode");
+                window.location.reload();
+            }
+        };
+    }
 }
+
 
 // カスタムツールチップ要素を作成
 
@@ -827,7 +882,23 @@ async function handleSaveSettings(e) {
 
         app_id: parseInt(document.getElementById("app-id").value),
 
-        api_token: document.getElementById("api-token").value
+        api_token: document.getElementById("api-token").value,
+
+        memo_app_id: parseInt(document.getElementById("memo-app-id").value || "0"),
+
+        memo_api_token: document.getElementById("memo-api-token").value,
+
+        yamazumi_app_id: 354,
+
+        yamazumi_api_token: "Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC",
+
+        kobukuro_app_id: 368,
+
+        kobukuro_api_token: "4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS",
+
+        tsumikomi_app_id: parseInt(document.getElementById("tsumikomi-app-id").value || "514"),
+
+        tsumikomi_api_token: document.getElementById("tsumikomi-api-token").value || ""
 
     };
 
@@ -909,11 +980,8 @@ async function handleCopyPrevShapes() {
                 newEnd.setDate(targetDate.getDate());
             }
 
-            //フォーマット関数 (YYYY-MM-DD HH:mm:ss)
-            const fmt = (d) => {
-                const pad = n => n.toString().padStart(2,'0');
-                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-            };
+            //フォーマット関数 (ISO 8601)
+            const fmt = (d) => d.toISOString();
 
             const request = {
                 product_name: item.product_name,
@@ -1192,6 +1260,15 @@ function initEventListeners() {
         elements.btnCopyPrevShapes.addEventListener("click", handleCopyPrevShapes);
     }
 
+    // バランスビュー更新ボタン
+    const btnRefreshBalance = document.getElementById("btn-refresh-balance");
+    if (btnRefreshBalance) {
+        btnRefreshBalance.addEventListener("click", async () => {
+            balanceData = null;
+            await renderBalanceView();
+        });
+    }
+
 
 
     if (elements.btnTestData) {
@@ -1213,6 +1290,17 @@ function initEventListeners() {
     initMemoModal();
 
     initShapeModal();
+
+    // ウィンドウリサイズ時にガントチャートを再描画
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (document.getElementById("gantt-view").classList.contains("active")) {
+                renderGantt();
+            }
+        }, 200);
+    });
 
 }
 
@@ -1600,6 +1688,29 @@ async function handleGlobalMouseUp(e) {
 
         const newEnd = new Date(newStart.getTime() + durationMs);
 
+        // Memo/Shape specific logic: Reset Y offset if moving to a new row to prevents vertical jumping
+        if (schedule.product_name === 'MMO' || schedule.product_name === 'SHAP') {
+            try {
+                let parsed = JSON.parse(schedule.notes || '{}');
+                if (parsed.x !== undefined) {
+                     // Update internal X to match new time (optional, but good for consistency)
+                     // But critical: Reset Y if it was an absolute offset that is now wrong
+                     // However, the main render logic calculates topPx = rowTop + pixelPos.y
+                     // If we moved rows, pixelPos.y should be small (relative to row).
+                     // If it was large, it stays large. 
+                     // Let's reset it to a default '10' if we detected a date change?
+                     // For now, simpler to just let the update_schedule handle the date change.
+                     // But we should probably clear the 'y' from notes if we can, or update it.
+                     // IMPORTANT: The update_schedule below updates start/end time.
+                     // It does NOT update 'notes' (where x/y are stored).
+                     // We need to ALSO update notes with new X/y?
+                     // Actually, if we just update the date, the renderOverlayItems uses the date to find the row.
+                     // And uses pixelPos.y from notes.
+                     // If pixelPos.y was 10, it renders at 10px from top of New Row. Correct.
+                }
+            } catch(e) {}
+        }
+
 
 
         try {
@@ -1706,6 +1817,10 @@ function switchTab(tabName) {
 
         renderGantt();
 
+    } else if (tabName === "balance") {
+
+        renderBalanceView();
+
     }
 
 }
@@ -1804,10 +1919,10 @@ async function handleAddSchedule(e) {
 
         total_quantity: quantity,
 
-        production_status: "未生産",
+        production_status: document.getElementById("initial-status").value || "未生産",
 
-        notes: document.getElementById("notes").value || null
-
+        notes: document.getElementById("notes").value || null,
+        efficiency: document.getElementById("efficiency").value || null
     };
 
 
@@ -1820,11 +1935,25 @@ async function handleAddSchedule(e) {
 
             setStatus("スケジュールを追加しました");
 
+            // 次の入力のために終了時間を保持
+            const nextStartTime = document.getElementById("end-datetime").value;
+            // 遷移するかどうかを保持（リセット前に取得）
+            const goToList = document.getElementById("go-to-list-after-add").checked;
+
             elements.addForm.reset();
+
+            // 保持した終了時間を次の開始時間にセット
+            if (nextStartTime) {
+                document.getElementById("start-datetime").value = nextStartTime;
+                // 自動計算をトリガーするために日付変更イベントを発火したほうが親切かもだが、とりあえず値セットのみ
+            }
 
             await loadSchedules();
 
-            switchTab("schedule");
+            // チェックボックスの状態を確認して遷移
+            if (goToList) {
+                switchTab("schedule");
+            }
 
         } else {
 
@@ -1969,10 +2098,21 @@ function renderScheduleTable() {
 
 
     schedules.forEach(schedule => {
+        // MMOとSHAPは一覧に表示しない
+        if (schedule.product_name === "MMO" || schedule.product_name === "SHAP") return;
 
         const tr = document.createElement("tr");
 
         tr.dataset.id = schedule.id;
+        
+        // 作業者モード用: ステータスに応じたクラスを追加
+        if (schedule.production_status === "生産中") {
+            tr.classList.add("row-production");
+        } else if (schedule.production_status === "生産終了") {
+            tr.classList.add("row-completed");
+        } else {
+            tr.classList.add("row-pending");
+        }
 
         // schedule_numberを優先、なければkintone_record_id
 
@@ -1992,7 +2132,7 @@ function renderScheduleTable() {
 
             <td>${schedule.notes || "-"}</td>
 
-            <td><span class="status-badge">${schedule.production_status}</span></td>
+            <td><span class="status-badge ${getStatusBadgeClass(schedule.production_status)}">${schedule.production_status}</span></td>
 
             <td><span class="status-badge ${schedule.sync_status}">${getSyncStatusText(schedule.sync_status)}</span></td>
 
@@ -2028,7 +2168,12 @@ function renderScheduleTable() {
 
 }
 
-
+// ステータスに応じたバッジクラスを取得
+function getStatusBadgeClass(status) {
+    if (status === "生産中") return "status-production";
+    if (status === "生産終了") return "status-completed";
+    return "status-scheduled";
+}
 
 // 編集モーダルを開く
 
@@ -2355,19 +2500,33 @@ function renderGantt() {
 
 
 
-    timeline.innerHTML = '<div style="width:100px;padding:10px;font-weight:bold;">日仁/div>';
+    // コンテナの有効幅を取得（ラベル幅140pxを除く）
+    const containerWidth = container.clientWidth;
+    const availableWidth = Math.max(0, containerWidth - 140);
+    
+    // 24時間で分割、ただし最小60pxは維持
+    currentHourPx = Math.max(60, availableWidth / 24);
 
+    // タイムラインの幅を設定
+    timeline.style.minWidth = `${140 + currentHourPx * 24}px`;
+    
+    timeline.innerHTML = '<div style="width:140px;padding:10px;font-weight:bold;flex-shrink:0;">日付</div>';
+
+    // 24時間分（6:00〜翌5:00）を表示
     for (let h = 6; h < 30; h++) {
 
         const hour = h % 24;
 
-        timeline.innerHTML += `<div style="width:60px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);">${hour}:00</div>`;
+        timeline.innerHTML += `<div style="width:${currentHourPx}px;text-align:center;padding:10px;border-left:1px solid rgba(255,255,255,0.2);flex-shrink:0;">${hour}:00</div>`;
 
     }
 
 
 
     rows.innerHTML = "";
+    
+    // 行コンテナ（gantt-rows）の幅も合わせる
+    rows.style.minWidth = `${140 + currentHourPx * 24}px`;
 
     const startDate = new Date(currentDate);
 
@@ -2385,7 +2544,8 @@ function renderGantt() {
 
         const dateStr = formatIsoDate(rowDate);
 
-        const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()}`;
+        const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][rowDate.getDay()];
+        const displayDate = `${rowDate.getMonth() + 1}/${rowDate.getDate()} (${dayOfWeek})`;
 
 
 
@@ -2412,6 +2572,11 @@ function renderGantt() {
         contentDiv.className = "gantt-row-content";
 
         contentDiv.id = `gantt-date-${dateStr}`;
+        
+        // グリッドのサイズを動的に更新
+        contentDiv.style.width = `${currentHourPx * 24}px`;
+        contentDiv.style.backgroundSize = `${currentHourPx}px 100%`;
+        contentDiv.style.backgroundImage = `repeating-linear-gradient(90deg, transparent, transparent ${currentHourPx-1}px, #F5F5F7 ${currentHourPx-1}px, #F5F5F7 ${currentHourPx}px)`;
 
         row.appendChild(contentDiv);
 
@@ -2427,17 +2592,23 @@ function renderGantt() {
 
 
 
-        // MMO/SHAPを除夁
+        const rowEnd = new Date(rowStart);
+        rowEnd.setDate(rowEnd.getDate() + 1); // 翌日6:00
 
+        // MMO/SHAPを除外
         const daySchedules = schedules.filter(s => {
 
             if (s.product_name === "MMO" || s.product_name === "SHAP") return false;
 
             if (!s.start_datetime) return false;
 
-            const sTime = new Date(s.start_datetime);
+            const sStart = new Date(s.start_datetime);
+            // 終了日時がない場合はデフォルト1時間として扱う（表示ロジックに合わせる）
+            const sEnd = s.end_datetime ? new Date(s.end_datetime) : new Date(sStart.getTime() + 60*60*1000);
 
-            return getProductionDateStr(sTime) === dateStr;
+            // 行の期間（rowStart ~ rowEnd）と重複しているかチェック
+            // Start < RowEnd AND End > RowStart
+            return sStart < rowEnd && sEnd > rowStart;
 
         });
 
@@ -2457,7 +2628,9 @@ function renderGantt() {
 
                 const bar = createGanttBar(schedule, rowStart, laneIndex);
 
-                contentDiv.appendChild(bar);
+                if (bar) {
+                    contentDiv.appendChild(bar);
+                }
 
             });
 
@@ -2504,84 +2677,126 @@ function renderOverlayItems(container, startDate) {
     overlayItems.forEach(item => {
         if (!item.start_datetime) return;
 
-        // 日付チェック：表示中の日付（startDate）と一致するものだけ表示
-        const itemDate = new Date(item.start_datetime);
-        const viewDate = new Date(startDate);
+        // 文字列の日付を取得
+        const itemStart = new Date(item.start_datetime);
+        const itemDateStr = getProductionDateStr(itemStart);
         
-        // 年月日が一致するか確認（時間は無視）
-        if (itemDate.getFullYear() !== viewDate.getFullYear() ||
-            itemDate.getMonth() !== viewDate.getMonth() ||
-            itemDate.getDate() !== viewDate.getDate()) {
-            return;
-        }
+        // その日付の行（row）を探す
+        const rowElement = container.querySelector(`.gantt-row[data-date="${itemDateStr}"]`);
+        
+        // 行が存在しなければ（画面外ならば）表示しない
+        if (!rowElement) return;
+
+        // 行の位置基準
+        const rowTop = rowElement.offsetTop;
 
         // ピクセル位置をnotesから取得（存在すれば）
         let pixelPos = null;
         let notesData = item.notes || '';
         if (item.product_name === 'MMO') {
-            // MMOのnotesはテキストまたは{text, x, y, scale}形式
             try {
                 const parsed = JSON.parse(notesData);
-                if (parsed.x !== undefined && parsed.y !== undefined) {
-                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                if (parsed.x !== undefined) {
+                     // Y座標は無視してrowTop基準にする（日付ズレ防止）
+                    pixelPos = { x: parsed.x, y: 10, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
                     notesData = parsed.text || '';
                 }
             } catch(e) { /* テキスト形式 */ }
         } else if (item.product_name === 'SHAP') {
-            // SHAPのnotesは{type, color, text, x, y, scale}形式
             try {
                 const parsed = JSON.parse(notesData);
-                if (parsed.x !== undefined && parsed.y !== undefined) {
-                    pixelPos = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
+                if (parsed.x !== undefined) {
+                    pixelPos = { x: parsed.x, y: 10, w: parsed.w, h: parsed.h, scale: parsed.scale || 1.0 };
                 }
             } catch(e) {}
         }
 
         let leftPx, topPx, widthPx, heightPx;
         
+        // Debug logging
+        // console.log(`Item ${item.id} (${item.product_name}): pixelPos=`, pixelPos);
+        
         if (pixelPos) {
-            // ピクセル位置とサイズが保存されていればそれを使用
+            // 保存されたX位置を使用
             leftPx = pixelPos.x;
-            topPx = pixelPos.y;
-            widthPx = pixelPos.w || 120;
-            heightPx = pixelPos.h || 80;
+            // Y位置は行基準に強制
+            topPx = rowTop + (pixelPos.y || 10);
+            widthPx = pixelPos.w || 240; // Default width 240
+            heightPx = pixelPos.h || 120; // Default height 120
         } else {
             // 保存されていなければ日時から計算
-            const itemStart = new Date(item.start_datetime);
-            const itemDateStr = getProductionDateStr(itemStart);
-            const rowlement = container.querySelector('[data-date="' + itemDateStr + '"]');
-            if (!rowlement) return;
+            if (itemStart.getHours() < 6) itemStart.setDate(itemStart.getDate() - 1);
             
-            const rowTop = rowlement.offsetTop;
             const dayStart = new Date(itemStart);
             dayStart.setHours(6, 0, 0, 0);
-            if (itemStart.getHours() < 6) dayStart.setDate(dayStart.getDate() - 1);
-            const msFrom6AM = itemStart.getTime() - dayStart.getTime();
-            leftPx = 100 + (msFrom6AM / (60 * 60 * 1000)) * 60;
-            topPx = rowTop + 10;
             
-            // デフォルトサイズ
-            const itemStart2 = new Date(item.start_datetime);
-            const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart2.getTime() + 2*60*60*1000);
-            const durationMs = itemnd.getTime() - itemStart2.getTime();
-            widthPx = Math.max(60, (durationMs / (60 * 60 * 1000)) * 60);
-            heightPx = 80;
+    // 行の範囲内（当日6:00〜翌6:00）にクランプする
+    const rowStartMs = dayStart.getTime(); // Assuming dayStart here is the 6AM start of the row
+    const rowEndMs = rowStartMs + 24 * 60 * 60 * 1000;
+
+    const itemStartRaw = new Date(item.start_datetime); // Changed from schedule to item
+    const itemEndRaw = item.end_datetime 
+        ? new Date(item.end_datetime) 
+        : new Date(itemStartRaw.getTime() + 60*60*1000); // endがなければとりあえず1時間
+
+    // クランプ処理
+    const clampStart = itemStartRaw.getTime() < rowStartMs ? new Date(rowStartMs) : itemStartRaw;
+    const clampEnd = itemEndRaw.getTime() > rowEndMs ? new Date(rowEndMs) : itemEndRaw;
+
+    const msFrom6AM = clampStart.getTime() - rowStartMs; 
+    // cssの.gantt-row-label width: 140pxに合わせてオフセットを調整
+    leftPx = 140 + (msFrom6AM / (60 * 60 * 1000)) * currentHourPx;
+    topPx = rowTop + 10; // This was already calculated as rowTop + 10
+    
+    const durationMs = clampEnd.getTime() - clampStart.getTime();
+    widthPx = Math.max(currentHourPx, (durationMs / (60 * 60 * 1000)) * currentHourPx); // 念のためmax(0)
+    heightPx = 120; // Default height increased
+        }
+        
+        const itemEnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart.getTime() + 2*60*60*1000);
+
+    // Force min sizes if they are small (catch old defaults 120x80 or similar)
+    // New default target: 240x120
+    if (!pixelPos || (widthPx > 0 && widthPx < 200)) {
+        // console.log(`Resizing Item ${item.id} from ${widthPx} to 240`);
+        widthPx = 240;
+    }
+    if (!pixelPos || (heightPx > 0 && heightPx < 100)) {
+         heightPx = 120;
+    }
+
+    const iteml = document.createElement('div');
+    
+    // VISUAL DEBUG: Add a red border to indicate this rendered via relevant code
+    // iteml.style.border = '2px solid red';
+
+        // Debug logging for drag
+        if (appMode !== 'worker') {
+             iteml.addEventListener('mousedown', (e) => {
+                 console.log('MouseDown on item:', item.id);
+             });
         }
 
-        const itemStart = new Date(item.start_datetime);
-        const itemnd = item.end_datetime ? new Date(item.end_datetime) : new Date(itemStart.getTime() + 2*60*60*1000);
+        // Center content and add transition for hover effect
+        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + topPx + 'px;width:' + widthPx + 'px;height:' + heightPx + 'px;pointer-events:auto;cursor:move;padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1001;background:rgba(255,255,255,0.1);border:1px solid rgba(0,0,0,0.2);border-radius:8px;overflow:visible;box-sizing:border-box;transform-origin:top left;transition:border-color 0.2s, box-shadow 0.2s, background-color 0.2s;';
+        
+        iteml.addEventListener('mouseenter', () => {
+             iteml.style.borderColor = 'rgba(0,122,255,0.8)';
+             iteml.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+        });
+        iteml.addEventListener('mouseleave', () => {
+             iteml.style.borderColor = 'rgba(0,0,0,0.2)';
+             iteml.style.boxShadow = 'none';
+        });
 
-        const iteml = document.createElement('div');
-
-        iteml.style.cssText = 'position:absolute;left:' + leftPx + 'px;top:' + topPx + 'px;width:' + widthPx + 'px;height:' + heightPx + 'px;pointer-events:auto;cursor:move;padding:10px;display:flex;align-items:flex-start;justify-content:space-between;z-index:1001;background:transparent;border:none;border-radius:4px;overflow:visible;box-sizing:border-box;transform-origin:top left;';
-
-        // 保存されたスケール値を適用
-        if (pixelPos && pixelPos.scale && pixelPos.scale !== 1.0) {
-            iteml.style.transform = `scale(${pixelPos.scale})`;
-        }
+    // Drag logic for overlay items
+    // TODO: Implement logic to update start_datetime when dropped on a different row
+    if (pixelPos && pixelPos.scale && pixelPos.scale !== 1.0) {
+        iteml.style.transform = `scale(${pixelPos.scale})`;
+    }
 
         if (item.product_name === 'MMO') {
-
+            // ... (Memo content generation - no changes needed, it appends to iteml)
             // 背景色はcssTextで設定済み（リサイズ確認用）
 
             // メモテキストをnotesDataから取得（JSON形式の場合はtextプロパティ）
@@ -2597,8 +2812,7 @@ function renderOverlayItems(container, startDate) {
 
             const textSpan = document.createElement('span');
 
-            textSpan.style.cssText = 'color:#333;font-size:14px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;cursor:text;';
-
+            textSpan.style.cssText = 'color:#333;font-size:22px;font-weight:500;white-space:pre-wrap;word-break:break-word;flex:1;cursor:text;text-align:center;width:100%;display:flex;align-items:center;justify-content:center;';
             textSpan.textContent = memoText;
 
             iteml.appendChild(textSpan);
@@ -2612,6 +2826,7 @@ function renderOverlayItems(container, startDate) {
                 input.style.cssText = 'width:100%;height:100%;border:1px solid #007AFF;border-radius:4px;padding:4px;font-size:14px;resize:none;outline:none;';
                 textSpan.style.display = 'none';
                 iteml.insertBefore(input, textSpan);
+                input.addEventListener('mousedown', (e) => e.stopPropagation());
                 input.focus();
                 input.select();
                 
@@ -2666,9 +2881,9 @@ function renderOverlayItems(container, startDate) {
 
             const contentSpan = document.createElement('span');
 
-            contentSpan.style.cssText = 'font-size:28px;display:flex;align-items:center;gap:8px;flex:1;';
+            contentSpan.style.cssText = 'font-size:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0px;flex:1;line-height:1;width:100%;';
 
-            contentSpan.innerHTML = icon + ' <span style="font-size:14px;font-weight:600;color:#333">' + (shapeInfo.text || '') + '</span>';
+            contentSpan.innerHTML = icon + ' <span style="font-size:22px;font-weight:600;color:#333;margin-top:4px;">' + (shapeInfo.text || '') + '</span>';
 
             iteml.appendChild(contentSpan);
 
@@ -2692,8 +2907,10 @@ function renderOverlayItems(container, startDate) {
         if (appMode !== 'worker') {
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
-            resizeHandle.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:se-resize;background:rgba(0,122,255,0.5);border-radius:0 0 4px 0;pointer-events:auto;z-index:10;';
-            resizeHandle.innerHTML = '⤡';
+            // Round circle handle, distinct look
+            resizeHandle.style.cssText = 'position:absolute;right:-8px;bottom:-8px;width:24px;height:24px;cursor:se-resize;background:#007AFF;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2);pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;';
+            resizeHandle.innerHTML = '⤡'; // Icon inside circle
+
             resizeHandle.style.fontSize = '12px';
             resizeHandle.style.display = 'flex';
             resizeHandle.style.alignItems = 'center';
@@ -2788,10 +3005,11 @@ function renderOverlayItems(container, startDate) {
             const origLeft = parseInt(iteml.style.left) || 0;
             const origTop = parseInt(iteml.style.top) || 0;
             const itemId = item.id;
-            const duration = itemnd.getTime() - itemStart.getTime();
+            const duration = itemEnd.getTime() - itemStart.getTime();
             
             iteml.style.cursor = 'grabbing';
             iteml.style.zIndex = '2000';
+            e.stopPropagation();
             e.preventDefault();
 
             function onMouseMove(ev) {
@@ -2912,15 +3130,15 @@ function calculateLanes(schedules) {
 
             const lastSchedule = lane[lane.length - 1];
 
-            const lastnd = lastSchedule.end_datetime
+            // 視認性確保のため、終了判定には最小表示時間を考慮する
+            const effectiveEnd = Math.max(
+                lastSchedule.end_datetime 
+                    ? new Date(lastSchedule.end_datetime).getTime() 
+                    : new Date(lastSchedule.start_datetime).getTime() + 60*60*1000,
+                new Date(lastSchedule.start_datetime).getTime() + MIN_VISUAL_DURATION_MS
+            );
 
-                ? new Date(lastSchedule.end_datetime).getTime()
-
-                : new Date(lastSchedule.start_datetime).getTime() + 60*60*1000;
-
-
-
-            if (start >= lastnd) {
+            if (start >= effectiveEnd) {
 
                 lane.push(schedule);
 
@@ -2951,61 +3169,66 @@ function calculateLanes(schedules) {
 function createGanttBar(schedule, dayStart6AM, laneIndex) {
 
     const bar = document.createElement("div");
-
     bar.className = "gantt-bar";
-
     bar.dataset.id = schedule.id;
 
+    // 行の範囲（当日6:00〜翌6:00）
+    const rowStartMs = dayStart6AM.getTime();
+    const rowEndMs = rowStartMs + 24 * 60 * 60 * 1000;
 
+    // スケジュールの本来の開始・終了日時
+    const itemStartRaw = new Date(schedule.start_datetime);
+    const itemEndRaw = schedule.end_datetime 
+        ? new Date(schedule.end_datetime) 
+        : new Date(itemStartRaw.getTime() + 60*60*1000);
 
-    const startTime = new Date(schedule.start_datetime);
+    // クランプ処理（行の範囲内に収める）
+    const clampStart = itemStartRaw.getTime() < rowStartMs ? new Date(rowStartMs) : itemStartRaw;
+    const clampEnd = itemEndRaw.getTime() > rowEndMs ? new Date(rowEndMs) : itemEndRaw;
 
-    const endTime = schedule.end_datetime ? new Date(schedule.end_datetime) : new Date(startTime.getTime() + 60*60*1000);
+    // 開始位置の計算 (6:00基準)
+    const msFrom6AM = clampStart.getTime() - rowStartMs; 
+    // .gantt-row-contentはlabel(140px)の後に配置されるため、内部座標0が6:00と一致する
+    // したがってオフセット140は不要
+    const leftPx = (msFrom6AM / (60 * 60 * 1000)) * currentHourPx;
+    
+    // 幅の計算
+    const durationMs = clampEnd.getTime() - clampStart.getTime();
+    // 最小幅（45分相当 = 0.75時間）を確保
+    // 45分 = 0.75時間 -> currentHourPx * 0.75
+    const MIN_WIDTH_PX = currentHourPx * 0.75; 
+    const widthPx = Math.max(MIN_WIDTH_PX, (durationMs / (60 * 60 * 1000)) * currentHourPx);
 
+    // 幅が0以下（表示不能）の場合は描画しない
+    if (widthPx <= 0) return null;
 
+    // 高さ・垂直位置の計算
+    const topPx = 10 + (laneIndex * 120);
 
-    const diffMs = startTime.getTime() - dayStart6AM.getTime();
-
-    const startMinutes = diffMs / (1000 * 60);
-
-
-
-    const durationMs = endTime.getTime() - startTime.getTime();
-
-    const durationMinutes = durationMs / (1000 * 60);
-
-
-
-    const left = (startMinutes / 60) * 60;
-
-    const width = Math.max((durationMinutes / 60) * 60, 60);
-
-    const top = 10 + laneIndex * 120;
-
-
-
-    bar.style.left = left + "px";
-
-    bar.style.width = width + "px";
-
-    bar.style.top = top + "px";
-
+    bar.style.left = `${leftPx}px`;
+    bar.style.width = `${widthPx}px`;
+    bar.style.top = `${topPx}px`;
     bar.style.height = '110px';
 
 
 
+    // 分割バーのスタイル適用
+    // 前日から続いている（開始時刻がクランプされている）
+    if (itemStartRaw.getTime() < rowStartMs) {
+        bar.classList.add("split-start"); // 左側を直角に
+    }
+    // 翌日に続く（終了時刻がクランプされている）
+    if (itemEndRaw.getTime() > rowEndMs) {
+        bar.classList.add("split-end"); // 右側を直角に
+    }
+
+    // ステータスに応じたクラス適用（分割判定とは独立させる）
     if (schedule.production_status === "生産終了") {
-
         bar.classList.add("status-completed");
-
     } else if (schedule.production_status === "生産中") {
-
         bar.classList.add("status-inprogress");
-
     } else {
-
         bar.classList.add("status-pending");
-
     }
 
 
@@ -3300,40 +3523,40 @@ if (schedule.product_name === "MMO") {
 
           // schedule_numberを優先、なければkintone_record_id
 
+          // schedule_numberを優先、なければkintone_record_id
+          // schedule_numberを優先、なければkintone_record_id
           const schedNo = schedule.schedule_number || schedule.kintone_record_id || "";
 
+          // 1. 製品名 (個数)
+          const qty = schedule.total_quantity || schedule.quantity1;
           const productSpan = document.createElement("span");
-
           productSpan.className = "bar-product";
-
-          productSpan.textContent = schedNo ? `[${schedNo}] ${schedule.product_name}` : schedule.product_name;
-
+          productSpan.style.fontWeight = "normal"; // 製品名は通常（指示なしだがバランス的に）
+          productSpan.textContent = qty ? `${schedule.product_name} (${qty})` : schedule.product_name;
           bar.appendChild(productSpan);
 
-          // 製造備考の表示
-          if (schedule.remarks) {
-              const remarksSpan = document.createElement("span");
-              remarksSpan.className = "bar-notes"; // bar-notesクラスを流用
-              remarksSpan.style.fontSize = "12px";
-              remarksSpan.style.marginTop = "2px";
-              remarksSpan.textContent = schedule.remarks;
-              bar.appendChild(remarksSpan);
+          // 2. 備考 (notes) ← 太字
+          const notes = schedule.notes;
+          if (notes) {
+              const notesSpan = document.createElement("span");
+              notesSpan.className = "bar-notes";
+              notesSpan.style.fontSize = "17px"; // 製品名(17px)に合わせる
+              notesSpan.style.fontWeight = "bold"; // 太字
+              notesSpan.style.marginTop = "2px";
+              notesSpan.style.overflow = "hidden";
+              notesSpan.style.textOverflow = "ellipsis";
+              notesSpan.textContent = notes;
+              bar.appendChild(notesSpan);
           }
 
-
-
-          const qty = schedule.total_quantity || schedule.quantity1;
-
-          if (qty) {
-
-              const qtySpan = document.createElement("span");
-
-              qtySpan.className = "bar-quantity";
-
-              qtySpan.textContent = `${qty}個`;
-
-              bar.appendChild(qtySpan);
-
+          // 3. スケジュール番号 ← 小さく
+          if (schedNo) {
+              const noSpan = document.createElement("span");
+              noSpan.style.fontSize = "9px"; // より小さく
+              noSpan.style.opacity = "0.7";
+              noSpan.style.marginTop = "4px"; // autoをやめて固定マージンに
+              noSpan.textContent = schedNo;
+              bar.appendChild(noSpan);
           }
 
     }
@@ -3341,13 +3564,11 @@ if (schedule.product_name === "MMO") {
 
 
     // スデータスラベルを追加
-
+    // 不要なので削除（バーの色で状態を表すため）
+    /*
     const statusSpan = document.createElement("span");
-
     statusSpan.className = "bar-status";
-
     const statusText = schedule.production_status || "未生産";
-
     const statusMap = {
         "予定": "未生産",
         "未生産": "未生産",
@@ -3355,24 +3576,11 @@ if (schedule.product_name === "MMO") {
         "生産終了": "生産終了",
         "完了": "生産終了"
     };
-
-    statusSpan.textContent = `、{statusMap[statusText] || statusText}】`;
-
+    statusSpan.textContent = `【${statusMap[statusText] || statusText}】`;
     bar.appendChild(statusSpan);
+    */
 
-
-
-    if (schedule.notes) {
-
-        const notesSpan = document.createElement("span");
-
-        notesSpan.className = "bar-notes";
-
-        notesSpan.textContent = schedule.notes;
-
-        bar.appendChild(notesSpan);
-
-    }
+    // 重複していたnotes追加ブロックを削除
 
 
 
@@ -3448,10 +3656,284 @@ function getSyncStatusText(status) {
     return map[status] || status;
 
 }
+
+// ========== 需給バランスビュー ==========
+
+// 追跡対象の主要製品
+const BALANCE_PRODUCTS = ['FS450NR', 'FS450K', 'FS450S', 'FS450D', 'FS250C', 'FS250CE', 'FS360F'];
+
+// 積込予定 item → 在庫品番 マッピング
+const SHIPPING_PRODUCT_MAP = {
+    '450NR': 'FS450NR',
+    '450K': 'FS450K',
+    '高ダイ': 'FS450K',
+    '低ショット': 'FS450S',
+    '大建': 'FS450D',
+    'FS250CE': 'FS250CE',
+    'FS250C': 'FS250C',
+    'FS360F': 'FS360F'
+};
+
+// バランスデータ状態
+let balanceData = null;
+
+/**
+ * セル値から出荷数量を抽出（shipping_check_plugin.js と同じロジック）
+ */
+function extractShippingTotal(cellVal) {
+    if (!cellVal) return 0;
+    let texts = [];
+    if (typeof cellVal === 'object' && !Array.isArray(cellVal)) {
+        texts.push(String(cellVal.left || ''));
+        texts.push(String(cellVal.center || ''));
+        texts.push(String(cellVal.right || ''));
+    } else {
+        texts.push(String(cellVal || ''));
+    }
+    let total = 0;
+    texts.forEach(t => {
+        const cleaned = t.replace(/※/g, ' ').replace(/　/g, ' ');
+        const matches = cleaned.match(/[+-]?\d[\d,]*(?:\.\d+)?/g) || [];
+        matches.forEach(m => {
+            const num = Number(m.replace(/,/g, ''));
+            if (!isNaN(num)) total += num;
+        });
+    });
+    return total;
 }
 
+/**
+ * kintone Apps 354/514 + ローカルスケジュールからバランスデータを取得
+ */
+async function fetchBalanceData() {
+    const statusEl = document.getElementById('balance-status');
+    if (statusEl) statusEl.textContent = '読込中...';
 
+    try {
+        // 1. 在庫データ取得 (App 354)
+        const invResponse = await invoke('fetch_kintone_records', {
+            appName: 'yamazumi',
+            query: '山状況 in ("出荷待ち", "一部出荷済") order by $id asc limit 500'
+        });
 
+        // 2. 出荷予定データ取得 (App 514)
+        const shipResponse = await invoke('fetch_kintone_records', {
+            appName: 'tsumikomi',
+            query: 'order by planDate desc limit 10'
+        });
+
+        // 3. 生産データ = ローカルschedules（loadSchedulesで取得済み）
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // === 在庫集計 ===
+        const inventory = {};
+        BALANCE_PRODUCTS.forEach(p => inventory[p] = 0);
+
+        if (invResponse.success && invResponse.data && invResponse.data.records) {
+            invResponse.data.records.forEach(r => {
+                const product = (r['品番'] && r['品番'].value || '').trim();
+                const status = r['山状況'] && r['山状況'].value;
+                let qty = 0;
+                if (status === '一部出荷済') {
+                    qty = parseInt(r['総個数_数値'] && r['総個数_数値'].value || 0) || 0;
+                } else {
+                    qty = parseInt(r['総個数'] && r['総個数'].value || 0) || 0;
+                }
+                // 製品マッチング
+                BALANCE_PRODUCTS.forEach(bp => {
+                    if (product === bp || product.indexOf(bp) >= 0) {
+                        inventory[bp] += qty;
+                    }
+                });
+            });
+        }
+
+        // === 出荷予定集計 ===
+        const shipping = {};
+        BALANCE_PRODUCTS.forEach(p => shipping[p] = new Array(14).fill(0));
+
+        if (shipResponse.success && shipResponse.data && shipResponse.data.records) {
+            shipResponse.data.records.forEach(record => {
+                const pd = record['planDate'] && record['planDate'].value;
+                if (!pd) return;
+                const planDate = new Date(pd + 'T00:00:00');
+                if (isNaN(planDate.getTime())) return;
+
+                const jsonStr = record['scheduleJson'] && record['scheduleJson'].value;
+                if (!jsonStr) return;
+
+                try {
+                    const parsed = JSON.parse(jsonStr);
+                    if (!parsed || !Array.isArray(parsed.rows)) return;
+
+                    parsed.rows.forEach(row => {
+                        if (row.group === '日本ロック') return;
+                        const item = (row.item || '').trim();
+                        if (!item) return;
+
+                        let productCode = null;
+                        for (const [key, code] of Object.entries(SHIPPING_PRODUCT_MAP)) {
+                            if (item === key || item.indexOf(key) >= 0) {
+                                productCode = code;
+                                break;
+                            }
+                        }
+                        if (!productCode || !shipping[productCode]) return;
+
+                        const values = Array.isArray(row.values) ? row.values : [];
+                        for (let col = 0; col < 7 && col < values.length; col++) {
+                            const dayDate = new Date(planDate);
+                            dayDate.setDate(dayDate.getDate() + col);
+                            const diffDays = Math.floor((dayDate - today) / 86400000);
+                            if (diffDays >= 0 && diffDays < 14) {
+                                shipping[productCode][diffDays] += extractShippingTotal(values[col]);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error('[Balance] scheduleJson解析エラー:', e);
+                }
+            });
+        }
+
+        // === 生産予定集計 ===
+        const production = {};
+        BALANCE_PRODUCTS.forEach(p => production[p] = new Array(14).fill(0));
+
+        schedules.forEach(s => {
+            const product = s.product_name;
+            if (!BALANCE_PRODUCTS.includes(product)) return;
+            // 完了済みは在庫に反映済みなのでスキップ
+            if (s.production_status === '完了') return;
+
+            const startDate = new Date(s.start_datetime);
+            if (isNaN(startDate.getTime())) return;
+            const diffDays = Math.floor((startDate - today) / 86400000);
+
+            if (diffDays >= 0 && diffDays < 14) {
+                const qty = s.total_quantity || s.quantity1 || 0;
+                production[product][diffDays] += qty;
+            }
+        });
+
+        // === 日付ラベル生成 ===
+        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+        const dates = [];
+        for (let i = 0; i < 14; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() + i);
+            dates.push({
+                date: d,
+                label: `${d.getMonth()+1}/${d.getDate()}`,
+                dayName: dayNames[d.getDay()],
+                isToday: i === 0,
+                isWeekend: d.getDay() === 0 || d.getDay() === 6
+            });
+        }
+
+        balanceData = { inventory, production, shipping, dates };
+        if (statusEl) statusEl.textContent = '取得完了';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+        return balanceData;
+
+    } catch (error) {
+        console.error('[Balance] データ取得エラー:', error);
+        if (statusEl) {
+            statusEl.textContent = 'エラー: ' + (error.message || error);
+            statusEl.style.color = '#ff3b30';
+        }
+        throw error;
+    }
+}
+
+/**
+ * バランスビューをレンダリング
+ */
+async function renderBalanceView() {
+    const content = document.getElementById('balance-content');
+    if (!content) return;
+
+    if (!balanceData) {
+        content.innerHTML = '<p style="text-align:center;color:#86868b;padding:40px;">データを取得中...</p>';
+        try {
+            await fetchBalanceData();
+        } catch (error) {
+            content.innerHTML = `<div style="text-align:center;padding:40px;">
+                <p style="color:#ff3b30;font-size:14px;margin-bottom:8px;">データ取得に失敗しました</p>
+                <p style="color:#86868b;font-size:12px;">${error}</p>
+                <p style="color:#86868b;font-size:11px;margin-top:12px;">
+                    Rust側に fetch_kintone_records コマンドが必要です。<br>
+                    balance_rust_patch.md を参照して変更を適用してください。
+                </p>
+            </div>`;
+            return;
+        }
+    }
+
+    const { inventory, production, shipping, dates } = balanceData;
+
+    let html = '<table class="balance-table">';
+
+    // ===== ヘッダー =====
+    html += '<thead><tr>';
+    html += '<th class="balance-product-col">製品</th>';
+    html += '<th class="balance-inv-col">現在庫</th>';
+    dates.forEach(d => {
+        const cls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
+        html += `<th class="${cls}">${d.label}<br><span class="balance-day-name">${d.dayName}</span></th>`;
+    });
+    html += '</tr></thead>';
+
+    // ===== ボディ =====
+    html += '<tbody>';
+    BALANCE_PRODUCTS.forEach(product => {
+        const inv = inventory[product] || 0;
+        let runningBalance = inv;
+
+        html += '<tr class="balance-row">';
+        html += `<td class="balance-product-col"><strong>${product}</strong></td>`;
+        html += `<td class="balance-inv-col">${inv.toLocaleString()}</td>`;
+
+        dates.forEach((d, i) => {
+            const prod = production[product][i] || 0;
+            const ship = shipping[product][i] || 0;
+            runningBalance += prod - ship;
+
+            const dayCls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
+            const valCls = runningBalance < 0 ? 'balance-negative'
+                : (runningBalance < inv * 0.3 ? 'balance-warning' : 'balance-positive');
+
+            const tooltip = `${product} ${d.label}(${d.dayName})\n在庫: ${inv}\n生産: +${prod}\n出荷: -${ship}\n残: ${runningBalance}`;
+
+            html += `<td class="${dayCls} ${valCls}" title="${tooltip}">`;
+            html += '<div class="balance-cell">';
+            html += `<span class="balance-val">${runningBalance.toLocaleString()}</span>`;
+            if (prod > 0 || ship > 0) {
+                html += '<span class="balance-detail">';
+                if (prod > 0) html += `<span class="balance-prod">+${prod}</span>`;
+                if (ship > 0) html += `<span class="balance-ship">-${ship}</span>`;
+                html += '</span>';
+            }
+            html += '</div></td>';
+        });
+
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+
+    // ===== 凡例 =====
+    html += '<div class="balance-legend">';
+    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#34c759;"></span> 充足</span>';
+    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff9500;"></span> 注意 (&lt;30%)</span>';
+    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff3b30;"></span> 不足</span>';
+    html += '<span class="balance-legend-info">セル: 残在庫予測 / <span class="balance-prod">+生産</span> <span class="balance-ship">-出荷</span></span>';
+    html += '</div>';
+
+    content.innerHTML = html;
+}
+
+}
 
 
 

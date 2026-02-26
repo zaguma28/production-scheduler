@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "production-scheduler",
+  "productName": "生産計画スケジューラー【作業者】",
   "version": "0.1.0",
-  "identifier": "com.gfg001481.production-scheduler",
+  "identifier": "com.gfg001481.production-scheduler-worker",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,9 +10,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "production-scheduler",
-        "width": 800,
-        "height": 600
+        "title": "生産計画スケジューラー【作業者】",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {

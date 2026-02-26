@@ -46,6 +46,9 @@
                 <button id="btn-sync-to-kintone" class="btn btn-primary">
                     📤 kintoneへ送信
                 </button>
+                <button id="btn-switch-mode" class="btn btn-secondary" title="モード切替">
+                    🔄 モード切替
+                </button>
                 <button id="btn-settings" class="btn btn-icon" title="設定">
                     ⚙️
                 </button>
@@ -58,6 +61,7 @@
             <button class="tab" data-tab="schedule">📋 スケジュール一覧</button>
             <button class="tab" data-tab="add">➕ 新規追加</button>
             <button class="tab" data-tab="inventory">📦 在庫グラフ</button>
+            <button class="tab" data-tab="balance">⚖️ 需給バランス</button>
         </nav>
 
         <!-- メインコンテンツ -->
@@ -155,6 +159,14 @@
                             <label for="quantity1">個数</label>
                             <input type="number" id="quantity1" min="0" placeholder="生産個数を入力">
                         </div>
+                        <div class="form-group">
+                            <label for="initial-status">初期ステータス（テスト用）</label>
+                            <select id="initial-status">
+                                <option value="未生産">未生産</option>
+                                <option value="生産中">生産中</option>
+                                <option value="生産終了">生産終了</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -189,7 +201,12 @@
                             <input type="text" id="notes" placeholder="備考を入力">
                         </div>
                     </div>
-                    <div class="form-actions">
+                    <div class="form-actions" style="display: flex; align-items: center; gap: 16px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="go-to-list-after-add">
+                            <span>登録後に一覧へ移動</span>
+                        </label>
+                        <div style="flex: 1;"></div>
                         <button type="submit" class="btn btn-primary btn-large">
                             ✅ スケジュールを追加
                         </button>
@@ -207,6 +224,20 @@
                 </div>
                 <div class="chart-container">
                     <canvas id="inventory-chart"></canvas>
+                </div>
+            </section>
+
+            <!-- 需給バランスビュー -->
+            <section id="balance-view" class="view">
+                <div class="view-header">
+                    <h2>⚖️ 需給バランス（14日間）</h2>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button id="btn-refresh-balance" class="btn btn-secondary">🔄 データ更新</button>
+                        <span id="balance-status" style="font-size:13px;color:#888;"></span>
+                    </div>
+                </div>
+                <div id="balance-content">
+                    <p style="text-align:center;padding:40px;color:#999;">🔄 タブをクリックするとデータを自動取得します</p>
                 </div>
             </section>
         </main>
@@ -229,8 +260,27 @@
                         <input type="number" id="app-id" placeholder="例: 351" required>
                     </div>
                     <div class="form-group">
-                        <label for="api-token">APIトークン</label>
+                        <label for="api-token">スケジュール用 APIトークン (ID 506)</label>
                         <input type="password" id="api-token" placeholder="APIトークンを入力" required>
+                    </div>
+                    <div style="border-top:1px solid #eee; margin:20px 0;"></div>
+                    <div class="form-group">
+                        <label for="memo-app-id">メモ・図形用 アプリID (ID 507)</label>
+                        <input type="number" id="memo-app-id" placeholder="例: 507">
+                    </div>
+                    <div class="form-group">
+                        <label for="memo-api-token">メモ・図形用 APIトークン</label>
+                        <input type="password" id="memo-api-token" placeholder="APIトークンを入力">
+                    </div>
+                    <div style="border-top:1px solid #eee; margin:20px 0;"></div>
+                    <h3 style="margin-bottom:12px;font-size:15px;">⚖️ 需給バランス用</h3>
+                    <div class="form-group">
+                        <label for="tsumikomi-app-id">積込予定 アプリID (ID 514)</label>
+                        <input type="number" id="tsumikomi-app-id" placeholder="例: 514">
+                    </div>
+                    <div class="form-group">
+                        <label for="tsumikomi-api-token">積込予定 APIトークン</label>
+                        <input type="password" id="tsumikomi-api-token" placeholder="APIトークンを入力">
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">💾 保存</button>
@@ -308,7 +358,12 @@
     </div>
     </div>
 
-    <script src="app.js?v=20260204201000"></script>
+    <!-- モード切替ボタン（作業者モード用） -->
+    <button id="worker-mode-switch-btn" class="btn btn-secondary" style="display:none; position:fixed; bottom:30px; left:30px; z-index:9999; padding:12px 24px; font-weight:bold; font-size:16px;">
+        🔄 モード切替
+    </button>
+
+    <script src="app.js?v=20260204201004"></script>
 </body>
 </html>
 
