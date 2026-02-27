@@ -3776,6 +3776,18 @@ function extractShippingTotal(cellVal) {
 }
 
 /**
+ * タイムアウト付きinvokeラッパー
+ */
+function invokeWithTimeout(cmd, args, timeoutMs = 20000) {
+    return Promise.race([
+        invoke(cmd, args),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`タイムアウト(${timeoutMs/1000}秒) - ネットワーク接続を確認してください`)), timeoutMs)
+        )
+    ]);
+}
+
+/**
  * kintone Apps 354/514 + ローカルスケジュールからバランスデータを取得
  */
 async function fetchBalanceData() {
@@ -3791,13 +3803,13 @@ async function fetchBalanceData() {
         console.log('[Balance] 在庫データ取得開始 (App 354)');
         let invResponse;
         try {
-            invResponse = await invoke('fetch_kintone_records', {
+            invResponse = await invokeWithTimeout('fetch_kintone_records', {
                 appName: 'yamazumi',
                 query: '山状況 in ("出荷待ち", "一部出荷済") order by $id asc limit 500'
             });
         } catch (e) {
             console.error('[Balance] invoke失敗(354):', e);
-            invResponse = { success: false, error: 'invoke例外: ' + (e.message || e) };
+            invResponse = { success: false, error: String(e.message || e) };
         }
         console.log('[Balance] 在庫レスポンス:', invResponse.success, invResponse.error || '',
             invResponse.data && invResponse.data.records ? invResponse.data.records.length + '件' : 'データなし');
@@ -3813,13 +3825,13 @@ async function fetchBalanceData() {
         console.log('[Balance] 出荷予定データ取得開始 (App 514)');
         let shipResponse;
         try {
-            shipResponse = await invoke('fetch_kintone_records', {
+            shipResponse = await invokeWithTimeout('fetch_kintone_records', {
                 appName: 'tsumikomi',
                 query: 'order by planDate desc limit 10'
             });
         } catch (e) {
             console.error('[Balance] invoke失敗(514):', e);
-            shipResponse = { success: false, error: 'invoke例外: ' + (e.message || e) };
+            shipResponse = { success: false, error: String(e.message || e) };
         }
         console.log('[Balance] 出荷レスポンス:', shipResponse.success, shipResponse.error || '',
             shipResponse.data && shipResponse.data.records ? shipResponse.data.records.length + '件' : 'データなし');
