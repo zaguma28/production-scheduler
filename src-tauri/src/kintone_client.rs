@@ -56,6 +56,8 @@ impl KintoneClient {
     /// 新しいクライアントを作成
     pub fn new(config: KintoneConfig) -> Result<Self> {
         let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
             .build()?;
 
         Ok(Self { client, config })

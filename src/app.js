@@ -3781,41 +3781,56 @@ function extractShippingTotal(cellVal) {
 async function fetchBalanceData() {
     const statusEl = document.getElementById('balance-status');
     const contentEl = document.getElementById('balance-content');
-    if (statusEl) {
-        statusEl.textContent = '読込中...';
-        statusEl.style.color = '#888';
-    }
+    const updateStatus = (msg, color) => {
+        if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || '#888'; }
+    };
+    updateStatus('在庫データ取得中 (App 354)...');
 
     try {
         // 1. 在庫データ取得 (App 354)
         console.log('[Balance] 在庫データ取得開始 (App 354)');
-        const invResponse = await invoke('fetch_kintone_records', {
-            appName: 'yamazumi',
-            query: '山状況 in ("出荷待ち", "一部出荷済") order by $id asc limit 500'
-        });
+        let invResponse;
+        try {
+            invResponse = await invoke('fetch_kintone_records', {
+                appName: 'yamazumi',
+                query: '山状況 in ("出荷待ち", "一部出荷済") order by $id asc limit 500'
+            });
+        } catch (e) {
+            console.error('[Balance] invoke失敗(354):', e);
+            invResponse = { success: false, error: 'invoke例外: ' + (e.message || e) };
+        }
         console.log('[Balance] 在庫レスポンス:', invResponse.success, invResponse.error || '',
             invResponse.data && invResponse.data.records ? invResponse.data.records.length + '件' : 'データなし');
 
         if (!invResponse.success) {
             const errMsg = '在庫データ取得エラー(354): ' + (invResponse.error || '不明なエラー');
             console.error('[Balance]', errMsg);
-            if (statusEl) { statusEl.textContent = errMsg; statusEl.style.color = '#ff3b30'; }
+            updateStatus(errMsg, '#ff9500');
         }
 
         // 2. 出荷予定データ取得 (App 514)
+        updateStatus('出荷予定データ取得中 (App 514)...');
         console.log('[Balance] 出荷予定データ取得開始 (App 514)');
-        const shipResponse = await invoke('fetch_kintone_records', {
-            appName: 'tsumikomi',
-            query: 'order by planDate desc limit 10'
-        });
+        let shipResponse;
+        try {
+            shipResponse = await invoke('fetch_kintone_records', {
+                appName: 'tsumikomi',
+                query: 'order by planDate desc limit 10'
+            });
+        } catch (e) {
+            console.error('[Balance] invoke失敗(514):', e);
+            shipResponse = { success: false, error: 'invoke例外: ' + (e.message || e) };
+        }
         console.log('[Balance] 出荷レスポンス:', shipResponse.success, shipResponse.error || '',
             shipResponse.data && shipResponse.data.records ? shipResponse.data.records.length + '件' : 'データなし');
 
         if (!shipResponse.success) {
             const errMsg = '出荷予定データ取得エラー(514): ' + (shipResponse.error || '不明なエラー');
             console.error('[Balance]', errMsg);
-            if (statusEl) { statusEl.textContent = errMsg; statusEl.style.color = '#ff3b30'; }
+            updateStatus(errMsg, '#ff9500');
         }
+
+        updateStatus('データ集計中...');
 
         // 3. 生産データ = ローカルschedules（loadSchedulesで取得済み）
         const today = new Date();
@@ -3962,85 +3977,101 @@ async function fetchBalanceData() {
  */
 async function renderBalanceView() {
     const content = document.getElementById('balance-content');
-    if (!content) return;
-
-    if (!balanceData) {
-        content.innerHTML = '<p style="text-align:center;color:#86868b;padding:40px;">データを取得中...</p>';
-        try {
-            await fetchBalanceData();
-        } catch (error) {
-            content.innerHTML = `<div style="text-align:center;padding:40px;">
-                <p style="color:#ff3b30;font-size:14px;margin-bottom:8px;">データ取得に失敗しました</p>
-                <p style="color:#86868b;font-size:12px;">${error}</p>
-                <p style="color:#86868b;font-size:11px;margin-top:12px;">
-                    Rust側に fetch_kintone_records コマンドが必要です。<br>
-                    balance_rust_patch.md を参照して変更を適用してください。
-                </p>
-            </div>`;
-            return;
-        }
+    if (!content) {
+        console.error('[Balance] balance-content要素が見つかりません');
+        return;
     }
 
-    const { inventory, production, shipping, dates } = balanceData;
-
-    let html = '<table class="balance-table">';
-
-    // ===== ヘッダー =====
-    html += '<thead><tr>';
-    html += '<th class="balance-product-col">製品</th>';
-    html += '<th class="balance-inv-col">現在庫</th>';
-    dates.forEach(d => {
-        const cls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
-        html += `<th class="${cls}">${d.label}<br><span class="balance-day-name">${d.dayName}</span></th>`;
-    });
-    html += '</tr></thead>';
-
-    // ===== ボディ =====
-    html += '<tbody>';
-    BALANCE_PRODUCTS.forEach(product => {
-        const inv = inventory[product] || 0;
-        let runningBalance = inv;
-
-        html += '<tr class="balance-row">';
-        html += `<td class="balance-product-col"><strong>${product}</strong></td>`;
-        html += `<td class="balance-inv-col">${inv.toLocaleString()}</td>`;
-
-        dates.forEach((d, i) => {
-            const prod = production[product][i] || 0;
-            const ship = shipping[product][i] || 0;
-            runningBalance += prod - ship;
-
-            const dayCls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
-            const valCls = runningBalance < 0 ? 'balance-negative'
-                : (runningBalance < inv * 0.3 ? 'balance-warning' : 'balance-positive');
-
-            const tooltip = `${product} ${d.label}(${d.dayName})\n在庫: ${inv}\n生産: +${prod}\n出荷: -${ship}\n残: ${runningBalance}`;
-
-            html += `<td class="${dayCls} ${valCls}" title="${tooltip}">`;
-            html += '<div class="balance-cell">';
-            html += `<span class="balance-val">${runningBalance.toLocaleString()}</span>`;
-            if (prod > 0 || ship > 0) {
-                html += '<span class="balance-detail">';
-                if (prod > 0) html += `<span class="balance-prod">+${prod}</span>`;
-                if (ship > 0) html += `<span class="balance-ship">-${ship}</span>`;
-                html += '</span>';
+    try {
+        if (!balanceData) {
+            content.innerHTML = '<p style="text-align:center;color:#86868b;padding:40px;">データを取得中...</p>';
+            try {
+                await fetchBalanceData();
+            } catch (error) {
+                console.error('[Balance] fetchBalanceData失敗:', error);
+                content.innerHTML = `<div style="text-align:center;padding:40px;">
+                    <p style="color:#ff3b30;font-size:14px;margin-bottom:8px;">データ取得に失敗しました</p>
+                    <p style="color:#86868b;font-size:12px;">${error}</p>
+                </div>`;
+                return;
             }
-            html += '</div></td>';
+        }
+
+        if (!balanceData) {
+            content.innerHTML = '<p style="text-align:center;color:#ff9500;padding:40px;">データが取得できませんでした</p>';
+            return;
+        }
+
+        console.log('[Balance] レンダリング開始');
+        const { inventory, production, shipping, dates } = balanceData;
+
+        let html = '<table class="balance-table">';
+
+        // ===== ヘッダー =====
+        html += '<thead><tr>';
+        html += '<th class="balance-product-col">製品</th>';
+        html += '<th class="balance-inv-col">現在庫</th>';
+        dates.forEach(d => {
+            const cls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
+            html += `<th class="${cls}">${d.label}<br><span class="balance-day-name">${d.dayName}</span></th>`;
         });
+        html += '</tr></thead>';
 
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
+        // ===== ボディ =====
+        html += '<tbody>';
+        BALANCE_PRODUCTS.forEach(product => {
+            const inv = inventory[product] || 0;
+            let runningBalance = inv;
 
-    // ===== 凡例 =====
-    html += '<div class="balance-legend">';
-    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#34c759;"></span> 充足</span>';
-    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff9500;"></span> 注意 (&lt;30%)</span>';
-    html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff3b30;"></span> 不足</span>';
-    html += '<span class="balance-legend-info">セル: 残在庫予測 / <span class="balance-prod">+生産</span> <span class="balance-ship">-出荷</span></span>';
-    html += '</div>';
+            html += '<tr class="balance-row">';
+            html += `<td class="balance-product-col"><strong>${product}</strong></td>`;
+            html += `<td class="balance-inv-col">${inv.toLocaleString()}</td>`;
 
-    content.innerHTML = html;
+            dates.forEach((d, i) => {
+                const prod = production[product][i] || 0;
+                const ship = shipping[product][i] || 0;
+                runningBalance += prod - ship;
+
+                const dayCls = d.isToday ? 'balance-today' : (d.isWeekend ? 'balance-weekend' : '');
+                const valCls = runningBalance < 0 ? 'balance-negative'
+                    : (runningBalance < inv * 0.3 ? 'balance-warning' : 'balance-positive');
+
+                const tooltip = `${product} ${d.label}(${d.dayName})\n在庫: ${inv}\n生産: +${prod}\n出荷: -${ship}\n残: ${runningBalance}`;
+
+                html += `<td class="${dayCls} ${valCls}" title="${tooltip}">`;
+                html += '<div class="balance-cell">';
+                html += `<span class="balance-val">${runningBalance.toLocaleString()}</span>`;
+                if (prod > 0 || ship > 0) {
+                    html += '<span class="balance-detail">';
+                    if (prod > 0) html += `<span class="balance-prod">+${prod}</span>`;
+                    if (ship > 0) html += `<span class="balance-ship">-${ship}</span>`;
+                    html += '</span>';
+                }
+                html += '</div></td>';
+            });
+
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+
+        // ===== 凡例 =====
+        html += '<div class="balance-legend">';
+        html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#34c759;"></span> 充足</span>';
+        html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff9500;"></span> 注意 (&lt;30%)</span>';
+        html += '<span class="balance-legend-item"><span class="balance-dot" style="background:#ff3b30;"></span> 不足</span>';
+        html += '<span class="balance-legend-info">セル: 残在庫予測 / <span class="balance-prod">+生産</span> <span class="balance-ship">-出荷</span></span>';
+        html += '</div>';
+
+        content.innerHTML = html;
+        console.log('[Balance] レンダリング完了');
+
+    } catch (error) {
+        console.error('[Balance] renderBalanceView例外:', error);
+        content.innerHTML = `<div style="text-align:center;padding:40px;">
+            <p style="color:#ff3b30;font-size:14px;margin-bottom:8px;">表示エラー</p>
+            <p style="color:#86868b;font-size:12px;">${error.message || error}</p>
+        </div>`;
+    }
 }
 
 
