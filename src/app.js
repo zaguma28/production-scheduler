@@ -930,6 +930,75 @@ async function handleSaveSettings(e) {
 
 }
 
+
+/**
+ * 接続テスト - 各kintoneアプリへの接続を確認
+ */
+async function handleTestConnection() {
+    const btn = document.getElementById('test-connection');
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ テスト中...';
+    btn.disabled = true;
+
+    // まず現在の設定を保存
+    const config = {
+        subdomain: document.getElementById('subdomain').value,
+        app_id: parseInt(document.getElementById('app-id').value),
+        api_token: document.getElementById('api-token').value,
+        memo_app_id: parseInt(document.getElementById('memo-app-id').value || '0'),
+        memo_api_token: document.getElementById('memo-api-token').value,
+        yamazumi_app_id: 354,
+        yamazumi_api_token: 'Qig2MiwdI0McEcbPZNbP2ORkg3UQoB15wx6bBJqC',
+        kobukuro_app_id: 368,
+        kobukuro_api_token: '4U3hAsfb1bLbww5XT0ppcz4f9AcdOmp1SLIfyAIS',
+        tsumikomi_app_id: parseInt(document.getElementById('tsumikomi-app-id').value || '514'),
+        tsumikomi_api_token: document.getElementById('tsumikomi-api-token').value || ''
+    };
+
+    try {
+        await invoke('save_kintone_config', { config });
+    } catch (e) {
+        console.error('設定保存エラー:', e);
+    }
+
+    const tests = [
+        { name: 'スケジュール(506)', app: 'main', query: 'limit 1' },
+        { name: 'メモ(507)', app: 'memo', query: 'limit 1' },
+        { name: '山積表(354)', app: 'yamazumi', query: 'limit 1' },
+        { name: '積込予定(514)', app: 'tsumikomi', query: 'limit 1' }
+    ];
+
+    const results = [];
+    for (const test of tests) {
+        try {
+            const res = await invoke('fetch_kintone_records', {
+                appName: test.app,
+                query: test.query
+            });
+            if (res.success) {
+                const count = res.data && res.data.records ? res.data.records.length : 0;
+                results.push({ name: test.name, ok: true, detail: `OK (${count}件)` });
+            } else {
+                results.push({ name: test.name, ok: false, detail: res.error || 'NG' });
+            }
+        } catch (e) {
+            results.push({ name: test.name, ok: false, detail: String(e) });
+        }
+    }
+
+    // 結果をアラートで表示
+    const allOk = results.every(r => r.ok);
+    let msg = allOk ? '✅ 全アプリ接続OK！\n\n' : '⚠️ 一部接続に問題があります\n\n';
+    results.forEach(r => {
+        msg += (r.ok ? '✅' : '❌') + ' ' + r.name + ': ' + r.detail + '\n';
+    });
+    alert(msg);
+
+    btn.textContent = originalText;
+    btn.disabled = false;
+
+}
+
 // 前日の図形・メモをコピー
 async function handleCopyPrevShapes() {
     if (!confirm('前日（昨日）のメモ・図形を、現在表示中の日付にコピーしますか？')) return;
@@ -1269,7 +1338,11 @@ function initEventListeners() {
         });
     }
 
-
+    // 接続テストボタン
+    const btnTestConnection = document.getElementById("test-connection");
+    if (btnTestConnection) {
+        btnTestConnection.addEventListener("click", handleTestConnection);
+    }
 
     if (elements.btnTestData) {
 
@@ -2636,7 +2709,7 @@ function renderGantt() {
 
         });
 
-
+    }
 
 
 
@@ -3707,20 +3780,42 @@ function extractShippingTotal(cellVal) {
  */
 async function fetchBalanceData() {
     const statusEl = document.getElementById('balance-status');
-    if (statusEl) statusEl.textContent = '読込中...';
+    const contentEl = document.getElementById('balance-content');
+    if (statusEl) {
+        statusEl.textContent = '読込中...';
+        statusEl.style.color = '#888';
+    }
 
     try {
         // 1. 在庫データ取得 (App 354)
+        console.log('[Balance] 在庫データ取得開始 (App 354)');
         const invResponse = await invoke('fetch_kintone_records', {
             appName: 'yamazumi',
             query: '山状況 in ("出荷待ち", "一部出荷済") order by $id asc limit 500'
         });
+        console.log('[Balance] 在庫レスポンス:', invResponse.success, invResponse.error || '',
+            invResponse.data && invResponse.data.records ? invResponse.data.records.length + '件' : 'データなし');
+
+        if (!invResponse.success) {
+            const errMsg = '在庫データ取得エラー(354): ' + (invResponse.error || '不明なエラー');
+            console.error('[Balance]', errMsg);
+            if (statusEl) { statusEl.textContent = errMsg; statusEl.style.color = '#ff3b30'; }
+        }
 
         // 2. 出荷予定データ取得 (App 514)
+        console.log('[Balance] 出荷予定データ取得開始 (App 514)');
         const shipResponse = await invoke('fetch_kintone_records', {
             appName: 'tsumikomi',
             query: 'order by planDate desc limit 10'
         });
+        console.log('[Balance] 出荷レスポンス:', shipResponse.success, shipResponse.error || '',
+            shipResponse.data && shipResponse.data.records ? shipResponse.data.records.length + '件' : 'データなし');
+
+        if (!shipResponse.success) {
+            const errMsg = '出荷予定データ取得エラー(514): ' + (shipResponse.error || '不明なエラー');
+            console.error('[Balance]', errMsg);
+            if (statusEl) { statusEl.textContent = errMsg; statusEl.style.color = '#ff3b30'; }
+        }
 
         // 3. 生産データ = ローカルschedules（loadSchedulesで取得済み）
         const today = new Date();
@@ -3833,8 +3928,23 @@ async function fetchBalanceData() {
         }
 
         balanceData = { inventory, production, shipping, dates };
-        if (statusEl) statusEl.textContent = '取得完了';
-        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+
+        // 集計結果サマリー
+        const invCount = invResponse.success && invResponse.data && invResponse.data.records ? invResponse.data.records.length : 0;
+        const shipCount = shipResponse.success && shipResponse.data && shipResponse.data.records ? shipResponse.data.records.length : 0;
+        const prodCount = schedules.filter(s => BALANCE_PRODUCTS.includes(s.product_name)).length;
+        const totalInv = Object.values(inventory).reduce((a, b) => a + b, 0);
+        console.log(`[Balance] 集計完了: 在庫${invCount}件(計${totalInv}個), 出荷${shipCount}件, 生産${prodCount}件`);
+
+        if (statusEl) {
+            if (invCount === 0 && shipCount === 0 && prodCount === 0) {
+                statusEl.textContent = '⚠️ データが見つかりません（設定を確認してください）';
+                statusEl.style.color = '#ff9500';
+            } else {
+                statusEl.textContent = `✅ 取得完了 (在庫:${invCount}件 出荷:${shipCount}件 生産:${prodCount}件)`;
+                statusEl.style.color = '#34c759';
+            }
+        }
         return balanceData;
 
     } catch (error) {
@@ -3931,8 +4041,6 @@ async function renderBalanceView() {
     html += '</div>';
 
     content.innerHTML = html;
-}
-
 }
 
 
